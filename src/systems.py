@@ -2,8 +2,8 @@
 import matplotlib.pyplot as plt
 plt.ion()
 
-from components import Position, Velocity, Acceleration
-from components import Radius
+from components import Position, Velocity, Acceleration, Forces
+from components import Radius, Mass
 
 class System:
     def update(self, entities):
@@ -19,7 +19,13 @@ class MovementSystem(System):
             pos = e.get(Position)
             vel = e.get(Velocity)
             acc = e.get(Acceleration)
+            forces = e.get(Forces)
+            mass = e.get(Mass)
             
+            if acc and forces and mass:
+                acc.x = forces.total_x/mass.mass
+                acc.y = forces.total_y/mass.mass
+
             if vel and acc:
                 vel.x += acc.x*self.dt
                 vel.y += acc.y*self.dt
@@ -27,6 +33,27 @@ class MovementSystem(System):
             if pos and vel:
                 pos.x += vel.x*self.dt
                 pos.y += vel.y*self.dt
+
+
+class ForceSystem(System):
+    def __init__(self):
+        pass
+
+    def update(self,entities):
+        for e in entities:
+            mass = e.get(Mass)
+            forces = e.get(Forces)
+            acc = e.get(Acceleration)
+
+        if forces and mass and acc:
+            forces.total_x = 0
+            forces.total_y = 0
+
+            for fx,fy in forces.components.values():
+                forces.total_x += fx
+                forces.total_x += fy
+
+            
 
 
 

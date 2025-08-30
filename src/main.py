@@ -3,7 +3,7 @@ import time
 
 from entities import Asteroid
 from components import Position, Velocity, Radius
-from systems import MovementSystem, RenderSystem
+from systems import ForceSystem, MovementSystem, RenderSystem
 
 
 
@@ -16,8 +16,8 @@ world_size = 200
 if __name__ == "__main__":
     past_time = 0
 
-    entity_list = [Asteroid(1,(10,10),(1,0),(0,0),1), Asteroid(2,(15,15),(1,2),(0.4,0.4),1)]
-    system_list = [MovementSystem(dt),RenderSystem(size=200)]
+    entity_list = [Asteroid(1,velocity=(1,1)), Asteroid(2,velocity=(1,0),component_forces={"test":(-0.5,0)})]
+    system_list = [ForceSystem(),MovementSystem(dt),RenderSystem(size=200)]
 
     try:
         while True:
