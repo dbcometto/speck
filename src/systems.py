@@ -1,4 +1,5 @@
 # Here systems are defined
+import math
 import matplotlib.pyplot as plt
 plt.ion()
 
@@ -41,19 +42,52 @@ class ForceSystem(System):
 
     def update(self,entities):
         for e in entities:
-            mass = e.get(Mass)
             forces = e.get(Forces)
-            acc = e.get(Acceleration)
 
-        if forces and mass and acc:
-            forces.total_x = 0
-            forces.total_y = 0
+            if forces:
+                forces.total_x = 0
+                forces.total_y = 0
 
-            for fx,fy in forces.components.values():
-                forces.total_x += fx
-                forces.total_x += fy
+                for fx,fy in forces.components.values():
+                    forces.total_x += fx
+                    forces.total_y += fy
 
             
+
+class GravitySystem:
+    def __init__(self):
+        self.G = (6.67e-17)                                 # in MN km^2/t^2
+        self.epsilon = 1e-15
+
+    def update(self,entities):
+
+        for i1,e1 in enumerate(entities):
+            for e2 in entities[i1+1:]: #enumerate(entities[i1+1:],start=i1+1):
+                    print(f"{e1.id} and {e2.id}")
+                    pos1 = e1.get(Position)
+                    pos2 = e2.get(Position)
+                    m1 = e1.get(Mass).mass
+                    m2 = e2.get(Mass).mass
+                    forces1 = e1.get(Forces)
+                    forces2 = e2.get(Forces)
+
+                    dx = pos2.x - pos1.x
+                    dy = pos2.y - pos1.y
+
+                    d = math.sqrt(dx**2+dy**2)
+
+                    f = self.G*m1*m2/(d**2 + self.epsilon**2)
+
+                    fx = dx/d*f
+                    fy = dy/d*f
+
+                    forces1.components[f"Gravity from {e2.id}"] = (fx, fy)
+                    forces2.components[f"Gravity from {e1.id}"] = (-fx, -fy)
+
+
+
+
+
 
 
 

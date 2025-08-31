@@ -17,12 +17,12 @@ class Entity:
     
 
 # Now create specific objects
-class Asteroid(Entity):
-    def __init__(self,entity_id,position=(0,0),velocity=(0,0),component_forces={},radius=1,mass=1):
+class Rock(Entity):
+    def __init__(self,entity_id,position=(0,0),velocity=(0,0),component_forces=None,radius=1,mass=1):
         super().__init__(entity_id)
         self.add_component(Position(*position))
         self.add_component(Velocity(*velocity))
         self.add_component(Acceleration())
-        self.add_component(Forces(component_forces))
+        self.add_component(Forces({} if component_forces is None else component_forces))
         self.add_component(Radius(radius))
         self.add_component(Mass(mass))
