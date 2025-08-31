@@ -34,3 +34,12 @@ class Radius:
 class Mass:
     def __init__(self,mass):
         self.mass = mass                    # in t = Mg = 1000 kg
+
+
+
+# More things
+
+class Thruster:
+    def __init__(self,max_thrust=1):
+        self.max_thrust = max_thrust
+        self.current_thrust = (0,0)

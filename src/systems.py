@@ -9,6 +9,21 @@ from components import Radius, Mass
 class System:
     def update(self, entities):
         raise NotImplementedError
+    
+
+# Dynamics
+
+class DynamicsGroup(System):
+    def __init__(self,dt,timewarp):
+        self.dt = dt
+        self.gravitySystem = GravitySystem()
+        self.forceSystem = ForceSystem()
+        self.movementSystem = MovementSystem(dt=self.dt*timewarp)
+
+    def update(self, entities):
+        self.gravitySystem.update(entities)
+        self.forceSystem.update(entities)
+        self.movementSystem.update(entities)
 
 
 class MovementSystem(System):
@@ -89,7 +104,7 @@ class GravitySystem:
 
 
 
-
+# Visualization
 
 class RenderSystem(System):
     def __init__(self,size=200):
