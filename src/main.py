@@ -20,7 +20,7 @@ if __name__ == "__main__":
     past_time = 0
 
     # entity_list = [Asteroid(1,velocity=(1,1)), Asteroid(2,velocity=(1,0),component_forces={"test":(-0.5,0)})]
-    entity_list = [Rock(1,position=(-50,-50),velocity=(20,0),mass=1e20,radius=10), Rock(2,position=(50,50),velocity=(-20,0),mass=1e20,radius=10)]
+    entity_list = [Rock(1,position=(0,0),velocity=(0,0),mass=1e21,radius=10), Rock(2,position=(0,-50),velocity=(40,0),mass=1e5,radius=5)]
     system_list = [GravitySystem(),ForceSystem(),MovementSystem(dt*timewarp),RenderSystem(size=200)]
 
     try:
