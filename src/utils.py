@@ -17,17 +17,12 @@ def calc_distance(e1:Entity, e2:Entity) -> Tuple[Distance,DistanceVector,Distanc
     """
     Calculates the distance from Entity e1 to Entity e2.
 
-    ### Returns
-    - float d : the scalar distance
-        (dx,dy) : (float,float)
-            the distance vector
-    -------
-    
-    
+    ### Returns 
 
-
-            
-        
+    d, (dx,dy), (ux,uy)
+    - d      : scalar distance
+    - (dx,dy): distance vector
+    - (ux,uy): distance unit vector
     """
     pos1 = e1.get(Position)
     pos2 = e2.get(Position)
