@@ -2,7 +2,7 @@
 
 from components import Position, Velocity, Acceleration, Forces
 from components import Radius, Mass, Width
-from components import Thruster
+from components import Thruster, Behavior_Orbiter
 
 # Next, create entities
 class Entity:
@@ -40,3 +40,8 @@ class Agent(Rock):
         self.remove_component(Radius)
         self.add_component(Width(width=width))
         self.add_component(Thruster(max_thrust=max_thrust))
+
+class Orbiter(Agent):
+    def __init__(self,entity_id,orbit_id,position=(0,0),velocity=(0,0),component_forces=None,mass=1,width=1,max_thrust=1):
+        super().__init__(entity_id,position,velocity,component_forces,mass,width,max_thrust)
+        self.add_component(Behavior_Orbiter(orbit_id))

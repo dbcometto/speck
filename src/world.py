@@ -3,7 +3,7 @@ import time
 
 from entities import Rock, Agent
 from components import Position, Velocity, Acceleration, Radius, Forces
-from systems import FunctionalityGroup, DynamicsGroup, RenderGroup 
+from systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup, RenderGroup 
 
 
 
@@ -20,9 +20,10 @@ class World:
         self.entities_by_id = {}
 
         self.systems = [
-        FunctionalityGroup(),
-        DynamicsGroup(dt=self.dt,timewarp=self.timewarp),
-        RenderGroup(size=self.worldsize),
+            BehaviorGroup(),
+            FunctionalityGroup(),
+            DynamicsGroup(dt=self.dt,timewarp=self.timewarp),
+            RenderGroup(size=self.worldsize),
         ]
 
 

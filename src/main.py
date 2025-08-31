@@ -3,6 +3,7 @@ import time
 
 from entities import Rock, Agent
 from world import World
+from components import Behavior_Orbiter
 
     
 
@@ -13,10 +14,13 @@ if __name__ == "__main__":
     dt = 1/hz
     world_size = 200
 
+    fred = Agent(3,position=(50,0),velocity=(0,40),mass=1,max_thrust=100,width=3)
+    fred.add_component(Behavior_Orbiter(1, vel_tolerance= 0.5))
+
     entity_list = [
         Rock(1,position=(0,0),velocity=(0,0),mass=1e21,radius=10), 
         Rock(2,position=(0,-50),velocity=(40,0),mass=1e5,radius=5),
-        Agent(3,position=(50,0),velocity=(0,40),mass=1,max_thrust=5,width=3),
+        fred,
         ]
 
 

@@ -48,3 +48,19 @@ class Thruster:
         self.max_thrust = max_thrust
         self.thrust_x = 0
         self.thrust_y = 0
+        self.desired_thrust_x = 0
+        self.desired_thrust_y = 0
+        self.throttle=0
+
+
+# AI Attributes
+
+class Behavior_RandomThruster:
+    def __init__(self):
+        pass
+
+
+class Behavior_Orbiter:
+    def __init__(self,orbit_id, vel_tolerance = 0.5):
+        self.orbit_id = orbit_id
+        self.vel_tolerance = vel_tolerance

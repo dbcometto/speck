@@ -7,10 +7,12 @@ from matplotlib.patches import FancyArrowPatch
 plt.ion()
 
 from utils import calc_distance
+from config import G
 
 from components import Position, Velocity, Acceleration, Forces
 from components import Radius, Mass, Width
 from components import Thruster
+from components import Behavior_Orbiter, Behavior_RandomThruster
 
 from entities import Rock, Agent
 
@@ -79,7 +81,7 @@ class ForceSystem(System):
 
 class GravitySystem:
     def __init__(self):
-        self.G = (6.67e-17)                                 # in MN km^2/t^2
+        self.G = G                                # in MN km^2/t^2
         self.epsilon = 1e-15
 
     def update(self,entities, entities_by_id):
@@ -126,17 +128,76 @@ class ThrusterSystem(System):
         for e in entities:
             thruster = e.get(Thruster)
             forces = e.get(Forces)
+            behaviorRandom = e.get(Behavior_RandomThruster)
 
             if thruster and forces:
-                thrust_x = random.random()-0.5
-                thrust_y = random.random()-0.5
+
+                if behaviorRandom:
+                    thrust_x = random.random()-0.5
+                    thrust_y = random.random()-0.5
+                else:
+                    thrust_x = thruster.desired_thrust_x
+                    thrust_y = thruster.desired_thrust_y
 
                 norm = math.sqrt(thrust_x**2 + thrust_y**2)
 
-                thruster.thrust_x = thrust_x*thruster.max_thrust/norm
-                thruster.thrust_y = thrust_y*thruster.max_thrust/norm
+                if norm != 0:
+                    thruster.thrust_x = thrust_x/norm*thruster.max_thrust*thruster.throttle
+                    thruster.thrust_y = thrust_y/norm*thruster.max_thrust*thruster.throttle
 
-                forces.components[f"Thruster"] = (thruster.thrust_x,thruster.thrust_y)
+                    forces.components[f"Thruster"] = (thruster.thrust_x,thruster.thrust_y)
+
+
+# Behavior Group
+
+class BehaviorGroup(System):
+    def __init__(self):
+        self.simpleOrbiterSystem = SimpleOrbiterSystem()
+
+    def update(self, entities, entities_by_id):
+        self.simpleOrbiterSystem.update(entities,entities_by_id)
+
+
+
+class SimpleOrbiterSystem(System):
+    def __init__(self):
+        self.G = G
+        self.kp = 5
+
+    def update(self, entities, entities_by_id):
+        for e in entities:
+            thruster = e.get(Thruster)
+            forces = e.get(Forces)
+            vel = e.get(Velocity)
+            behaviorOrbiter = e.get(Behavior_Orbiter)
+
+            
+
+            if behaviorOrbiter and forces and thruster and vel:
+                eO = entities_by_id[behaviorOrbiter.orbit_id]
+                M = eO.get(Mass)
+
+                if M:
+                    d,(dx,dy),(ux,uy) = calc_distance(e,eO)
+
+                    v_needed = math.sqrt(self.G*M.mass/d)
+                    v_needed_x = -dy/d*v_needed
+                    v_needed_y = dx/d*v_needed
+
+                    thruster.throttle = 1
+
+                    error_x = v_needed_x - vel.x
+                    error_y = v_needed_y - vel.y
+
+                    if error_x + error_y > behaviorOrbiter.vel_tolerance:
+
+                        thrust_needed_x = self.kp*error_x
+                        thrust_needed_y = self.kp*error_y
+
+                        thruster.desired_thrust_x = -thrust_needed_x
+                        thruster.desired_thrust_y = -thrust_needed_y
+
+
 
 
 
@@ -187,7 +248,7 @@ class RenderSystem(System):
 
             if pos and width and type(e)==Agent:
                 if thruster:
-                    arrow = FancyArrowPatch((pos.x, pos.y), (pos.x + thruster.thrust_x*self.thruster_scale, pos.y + thruster.thrust_y*self.thruster_scale), arrowstyle='-', mutation_scale=100, color="#FF7038", linewidth=self.thruster_width)
+                    arrow = FancyArrowPatch((pos.x, pos.y), (pos.x - thruster.thrust_x*self.thruster_scale, pos.y - thruster.thrust_y*self.thruster_scale), arrowstyle='-', mutation_scale=100, color="#FF7038", linewidth=self.thruster_width)
                     self.ax.add_patch(arrow)
 
                 circle = plt.Rectangle((pos.x-width/2, pos.y-width/2), width,width, color="#4EDAC2")
