@@ -46,4 +46,5 @@ class Width:
 class Thruster:
     def __init__(self,max_thrust=1):
         self.max_thrust = max_thrust
-        self.current_thrust = (0,0)
+        self.thrust_x = 0
+        self.thrust_y = 0

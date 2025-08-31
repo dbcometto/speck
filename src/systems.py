@@ -1,13 +1,15 @@
 # Here systems are defined
 import math
 import random
+
 import matplotlib.pyplot as plt
+from matplotlib.patches import FancyArrowPatch
 plt.ion()
 
 from utils import calc_distance
 
 from components import Position, Velocity, Acceleration, Forces
-from components import Radius, Mass
+from components import Radius, Mass, Width
 from components import Thruster
 
 from entities import Rock, Agent
@@ -126,15 +128,15 @@ class ThrusterSystem(System):
             forces = e.get(Forces)
 
             if thruster and forces:
-                thrust_x = 1
-                thrust_y = random.random()
+                thrust_x = random.random()-0.5
+                thrust_y = random.random()-0.5
 
                 norm = math.sqrt(thrust_x**2 + thrust_y**2)
 
-                thrust_x = thrust_x*thruster.max_thrust/norm
-                thrust_y = thrust_y*thruster.max_thrust/norm
+                thruster.thrust_x = thrust_x*thruster.max_thrust/norm
+                thruster.thrust_y = thrust_y*thruster.max_thrust/norm
 
-                forces.components[f"Thruster"] = (thrust_x,thrust_y)
+                forces.components[f"Thruster"] = (thruster.thrust_x,thruster.thrust_y)
 
 
 
@@ -143,7 +145,7 @@ class ThrusterSystem(System):
 
 # Visualization
 
-class RenderSystem(System):
+class RenderGroup(System):
     def __init__(self,size=200):
         self.fig, self.ax = plt.subplots()
         self.ax.set_xlim(-size//2, size//2)
@@ -152,6 +154,21 @@ class RenderSystem(System):
         self.fig.patch.set_facecolor('#090909')  # sets the figure background
         self.ax.set_facecolor('#090909')     # sets the axes (plot) background
 
+        self.renderSystem = RenderSystem(self.fig,self.ax)
+
+    def update(self, entities, entities_by_id):
+        self.renderSystem.update(entities,entities_by_id)
+
+
+class RenderSystem(System):
+    def __init__(self,fig,ax):
+        self.fig = fig
+        self.ax = ax
+
+        self.thruster_scale = 1.3
+        self.thruster_width = 1.8
+        
+
     def update(self, entities, entities_by_id):
         for patch in self.ax.patches:
             patch.remove()  
@@ -159,14 +176,25 @@ class RenderSystem(System):
         for e in entities:
             pos = e.get(Position)
             radius = e.get(Radius)
+            width = e.get(Width)
+            width = width.width if width else None
+
+            thruster = e.get(Thruster)
 
             if pos and radius and type(e)==Rock:
                 circle = plt.Circle((pos.x, pos.y), radius.radius, color='#666666')
                 self.ax.add_patch(circle)
 
-            if pos and radius and type(e)==Agent:
-                circle = plt.Rectangle((pos.x, pos.y), 2,2, color="#4EDAC2")
+            if pos and width and type(e)==Agent:
+                if thruster:
+                    arrow = FancyArrowPatch((pos.x, pos.y), (pos.x + thruster.thrust_x*self.thruster_scale, pos.y + thruster.thrust_y*self.thruster_scale), arrowstyle='-', mutation_scale=100, color="#FF7038", linewidth=self.thruster_width)
+                    self.ax.add_patch(arrow)
+
+                circle = plt.Rectangle((pos.x-width/2, pos.y-width/2), width,width, color="#4EDAC2")
                 self.ax.add_patch(circle)
+
+                
+
 
         plt.draw()
         self.fig.canvas.flush_events()  # small pause to update plot

@@ -35,8 +35,8 @@ class Rock(Entity):
 
 
 class Agent(Rock):
-    def __init__(self,entity_id,position=(0,0),velocity=(0,0),component_forces=None,radius=1,mass=1,width=1,max_thrust=1):
-        super().__init__(entity_id,position,velocity,component_forces,radius,mass)
+    def __init__(self,entity_id,position=(0,0),velocity=(0,0),component_forces=None,mass=1,width=1,max_thrust=1):
+        super().__init__(entity_id,position,velocity,component_forces,mass)
         self.remove_component(Radius)
         self.add_component(Width(width=width))
         self.add_component(Thruster(max_thrust=max_thrust))
