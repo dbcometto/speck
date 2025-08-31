@@ -97,6 +97,8 @@ class RenderSystem(System):
         self.ax.set_xlim(-size//2, size//2)
         self.ax.set_ylim(-size//2, size//2)
         self.ax.set_aspect('equal', adjustable='box')
+        self.fig.patch.set_facecolor('#222222')  # sets the figure background
+        self.ax.set_facecolor('#222222')     # sets the axes (plot) background
 
     def update(self, entities):
         for patch in self.ax.patches:
@@ -106,7 +108,7 @@ class RenderSystem(System):
             pos = e.get(Position)
             radius = e.get(Radius)
             if pos and radius:
-                circle = plt.Circle((pos.x, pos.y), radius.radius, color='gray')
+                circle = plt.Circle((pos.x, pos.y), radius.radius, color='#666666')
                 self.ax.add_patch(circle)
 
         plt.draw()
