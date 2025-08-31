@@ -35,6 +35,10 @@ class Mass:
     def __init__(self,mass):
         self.mass = mass                    # in t = Mg = 1000 kg
 
+class Width:
+    def __init__(self,width):
+        self.width = width                    # in km
+
 
 
 # More things

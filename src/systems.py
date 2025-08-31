@@ -1,13 +1,19 @@
 # Here systems are defined
 import math
+import random
 import matplotlib.pyplot as plt
 plt.ion()
 
+from utils import calc_distance
+
 from components import Position, Velocity, Acceleration, Forces
 from components import Radius, Mass
+from components import Thruster
+
+from entities import Rock, Agent
 
 class System:
-    def update(self, entities):
+    def update(self, entities, entities_by_id):
         raise NotImplementedError
     
 
@@ -20,17 +26,17 @@ class DynamicsGroup(System):
         self.forceSystem = ForceSystem()
         self.movementSystem = MovementSystem(dt=self.dt*timewarp)
 
-    def update(self, entities):
-        self.gravitySystem.update(entities)
-        self.forceSystem.update(entities)
-        self.movementSystem.update(entities)
+    def update(self, entities, entities_by_id):
+        self.gravitySystem.update(entities,entities_by_id)
+        self.forceSystem.update(entities,entities_by_id)
+        self.movementSystem.update(entities,entities_by_id)
 
 
 class MovementSystem(System):
     def __init__(self,dt):
         self.dt = dt
 
-    def update(self,entities):
+    def update(self,entities, entities_by_id):
         for e in entities:
             pos = e.get(Position)
             vel = e.get(Velocity)
@@ -55,7 +61,7 @@ class ForceSystem(System):
     def __init__(self):
         pass
 
-    def update(self,entities):
+    def update(self,entities, entities_by_id):
         for e in entities:
             forces = e.get(Forces)
 
@@ -74,7 +80,7 @@ class GravitySystem:
         self.G = (6.67e-17)                                 # in MN km^2/t^2
         self.epsilon = 1e-15
 
-    def update(self,entities):
+    def update(self,entities, entities_by_id):
 
         for i1,e1 in enumerate(entities):
             for e2 in entities[i1+1:]: #enumerate(entities[i1+1:],start=i1+1):
@@ -86,18 +92,49 @@ class GravitySystem:
                     forces1 = e1.get(Forces)
                     forces2 = e2.get(Forces)
 
-                    dx = pos2.x - pos1.x
-                    dy = pos2.y - pos1.y
-
-                    d = math.sqrt(dx**2+dy**2)
+                    d,(dx,dy),(ux,uy) = calc_distance(e1,e2)
 
                     f = self.G*m1*m2/(d**2 + self.epsilon**2)
 
-                    fx = dx/d*f
-                    fy = dy/d*f
+                    fx = ux*f
+                    fy = uy*f
 
                     forces1.components[f"Gravity from {e2.id}"] = (fx, fy)
                     forces2.components[f"Gravity from {e1.id}"] = (-fx, -fy)
+
+
+
+
+# Functionality
+
+class FunctionalityGroup(System):
+    def __init__(self):
+        self.thrusterSystem = ThrusterSystem()
+
+    def update(self, entities, entities_by_id):
+        self.thrusterSystem.update(entities,entities_by_id)
+
+
+
+class ThrusterSystem(System):
+    def __init__(self):
+        pass
+
+    def update(self, entities, entities_by_id):
+        for e in entities:
+            thruster = e.get(Thruster)
+            forces = e.get(Forces)
+
+            if thruster and forces:
+                thrust_x = 1
+                thrust_y = random.random()
+
+                norm = math.sqrt(thrust_x**2 + thrust_y**2)
+
+                thrust_x = thrust_x*thruster.max_thrust/norm
+                thrust_y = thrust_y*thruster.max_thrust/norm
+
+                forces.components[f"Thruster"] = (thrust_x,thrust_y)
 
 
 
@@ -112,18 +149,23 @@ class RenderSystem(System):
         self.ax.set_xlim(-size//2, size//2)
         self.ax.set_ylim(-size//2, size//2)
         self.ax.set_aspect('equal', adjustable='box')
-        self.fig.patch.set_facecolor('#222222')  # sets the figure background
-        self.ax.set_facecolor('#222222')     # sets the axes (plot) background
+        self.fig.patch.set_facecolor('#090909')  # sets the figure background
+        self.ax.set_facecolor('#090909')     # sets the axes (plot) background
 
-    def update(self, entities):
+    def update(self, entities, entities_by_id):
         for patch in self.ax.patches:
             patch.remove()  
 
         for e in entities:
             pos = e.get(Position)
             radius = e.get(Radius)
-            if pos and radius:
+
+            if pos and radius and type(e)==Rock:
                 circle = plt.Circle((pos.x, pos.y), radius.radius, color='#666666')
+                self.ax.add_patch(circle)
+
+            if pos and radius and type(e)==Agent:
+                circle = plt.Rectangle((pos.x, pos.y), 2,2, color="#4EDAC2")
                 self.ax.add_patch(circle)
 
         plt.draw()
