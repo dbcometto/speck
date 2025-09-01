@@ -18,8 +18,8 @@ class Acceleration:
         self.y = y                         # in km/s^2
 
 class Forces:
-    def __init__(self,components={},total_x=0,total_y=0):
-        self.components = components        # dictionary of form {"force_name":(fx,fy)}
+    def __init__(self,components=None,total_x=0,total_y=0):
+        self.components = components if components else {}        # dictionary of form {"force_name":(fx,fy)}
         self.total_x = total_x                    # in MN = t km/s^2
         self.total_y = total_y                    # in MN = t km/s^2
 

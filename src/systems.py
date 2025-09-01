@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch
 
 from utils import calc_distance
-from config import G, mass_unit_factor
+import config
 
 from components import Position, Velocity, Acceleration, Forces
 from components import Radius, Mass, Width
@@ -15,6 +15,8 @@ from components import Thruster
 from components import Behavior_Orbiter, Behavior_RandomThruster
 
 from entities import Rock, Agent
+
+from barnes_hut import QuadNode, compute_force
 
 class System:
     def update(self, entities, entities_by_id):
@@ -86,27 +88,49 @@ class ForceSystem(System):
 
 class GravitySystem:
     def __init__(self):
-        self.G = G                                # in MN km^2/t^2
-        self.epsilon = 1e-15
+        self.epsilon = 0.1
 
     def update(self,entities, entities_by_id):
 
-        for i1,e1 in enumerate(entities):
-            for e2 in entities[i1+1:]: #enumerate(entities[i1+1:],start=i1+1):
-                    m1 = e1.get(Mass).mass
-                    m2 = e2.get(Mass).mass
-                    forces1 = e1.get(Forces)
-                    forces2 = e2.get(Forces)
+        for e in entities:
+            forces = e.get(Forces)
+            if forces:
+                forces.components["Gravity"] = (0.0, 0.0)
 
-                    d,(dx,dy),(ux,uy) = calc_distance(e1,e2)
+        positions = [e.get(Position) for e in entities if e.has(Position)]
+        if not positions:
+            return
 
-                    f = self.G*m1*m2/(d**2 + self.epsilon**2)
+        x_min = min(p.x for p in positions)
+        x_max = max(p.x for p in positions)
+        y_min = min(p.y for p in positions)
+        y_max = max(p.y for p in positions)
+        root = QuadNode(x_min, x_max, y_min, y_max)
+        for e in entities:
+            root.insert(e)
 
-                    fx = ux*f
-                    fy = uy*f
+        # Compute forces
+        for e in entities:
+            compute_force(e, root, G=config.G, theta=10000, eps=self.epsilon)
+            # print(f"{type(e)} {e.id}: force=({e.get(Forces).components})")
 
-                    forces1.components[f"Gravity from {e2.id}"] = (fx, fy)
-                    forces2.components[f"Gravity from {e1.id}"] = (-fx, -fy)
+        # # O(n^2)
+        # for i1,e1 in enumerate(entities):
+        #     for e2 in entities[i1+1:]: #enumerate(entities[i1+1:],start=i1+1):
+        #             m1 = e1.get(Mass).mass
+        #             m2 = e2.get(Mass).mass
+        #             forces1 = e1.get(Forces)
+        #             forces2 = e2.get(Forces)
+
+        #             d,(dx,dy),(ux,uy) = calc_distance(e1,e2)
+
+        #             f = config.G*m1*m2/(d**2 + self.epsilon**2)
+
+        #             fx = ux*f
+        #             fy = uy*f
+
+        #             forces1.components[f"Gravity from {e2.id}"] = (fx, fy)
+        #             forces2.components[f"Gravity from {e1.id}"] = (-fx, -fy)
 
 
 class CollisionSystem:
@@ -132,8 +156,8 @@ class CollisionSystem:
 
                         if all([m1, m2, v1, v2, r1, r2, pos1, pos2]):
 
-                            m1 = m1.mass * mass_unit_factor
-                            m2 = m2.mass * mass_unit_factor
+                            m1 = m1.mass * config.mass_unit_factor
+                            m2 = m2.mass * config.mass_unit_factor
                             r1 = r1.radius
                             r2 = r2.radius
 
@@ -223,7 +247,7 @@ class BehaviorGroup(System):
 
 class SimpleOrbiterSystem(System):
     def __init__(self):
-        self.G = G
+
         self.kpt = 1
         self.kpr = 1
 
@@ -253,7 +277,7 @@ class SimpleOrbiterSystem(System):
                     utx,uty = -ury,urx
 
                     # calculate desired circular velocity
-                    v_needed = math.sqrt(self.G*M.mass/d_desired)
+                    v_needed = math.sqrt(config.G*M.mass/d_desired)
 
                     # calculate current velocity in terms of r/t frame
                     vr = vel.x * urx + vel.y * ury
@@ -422,6 +446,6 @@ class RenderSystem(System):
                 
 
 
-        # plt.draw()
-        # self.fig.canvas.flush_events()
-        plt.pause(0.0001)
+        plt.draw()
+        self.fig.canvas.flush_events()
+        # plt.pause(0.0001)
