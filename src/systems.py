@@ -422,5 +422,6 @@ class RenderSystem(System):
                 
 
 
-        plt.draw()
-        self.fig.canvas.flush_events()
+        # plt.draw()
+        # self.fig.canvas.flush_events()
+        plt.pause(0.0001)

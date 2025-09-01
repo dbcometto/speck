@@ -1,7 +1,8 @@
 # This is the world
 import time
+import json
 
-from entities import Rock, Agent
+from entities import Entity, Rock, Agent
 from components import Position, Velocity, Acceleration, Radius, Forces, Thruster
 from components import Behavior_Orbiter
 from systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup, RenderGroup 
@@ -9,8 +10,9 @@ from systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup, RenderGrou
 
 
 class World:
-    def __init__(self,entitylist=None,hz=20,timewarp=1,worldsize=200):
+    def __init__(self,worldpath="worlds/world.json",entitylist=None,hz=60,timewarp=1,worldsize=200):
         
+        self.worldpath = worldpath
         self.hz = hz
         self.dt = 1/hz
         self.timewarp = timewarp
@@ -37,12 +39,13 @@ class World:
                     self.past_time = current_time
 
                     self.update()
-                    
-                    if debugging:
-                        self.debugPrints()
 
         except KeyboardInterrupt:
-            pass
+            print("KeyboardInterrupt caught, closing world")
+        except Exception as e:
+            import traceback
+            print("Exception occurred:")
+            traceback.print_exc()  # full exception info
 
 
     def update(self):
@@ -52,14 +55,23 @@ class World:
             system.update(self.entities,self.entities_by_id)
 
 
-    def debugPrints(self):
-        for e in self.entities:
-            continue
-        
-            # print(f"{type(e)} {e.id}: {e.get(Forces).components}")
+    def save(self):
+        entity_list_dicts = [e.to_dict() for e in self.entities]
+        with open(self.worldpath, "w") as f:
+            json.dump(entity_list_dicts, f, indent=4)
 
-            # behaviorOrbiter = e.get(Behavior_Orbiter)
-            # thruster = e.get(Thruster)
-            # if behaviorOrbiter:
-            #     print(f"{type(e)} {e.id}: {behaviorOrbiter.orbit_id},{behaviorOrbiter.orbit_distance}")
-            #     print(f"{type(e)} {e.id}: {(thruster.desired_thrust_x,thruster.desired_thrust_y)}")
+    def load(self):
+        """Load a world from a JSON file."""
+        try:
+            with open(self.worldpath, "r") as f:
+                data = json.load(f)
+
+            self.entities = [Entity.from_dict(d) for d in data]
+        except:
+            print("Failed to load world")
+
+
+
+    # def generate(self,bounds=(1000,1000)):
+
+        

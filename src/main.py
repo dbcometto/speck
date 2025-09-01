@@ -13,12 +13,6 @@ from components import Behavior_Orbiter
 
 if __name__ == "__main__":
 
-    # Config
-    hz = 120
-    timewarp = 1
-    dt = 1/hz
-    world_size = 200
-
     fred = Agent(3,position=(60,0),velocity=(0,20),mass=1,max_thrust=50,width=3)
     fred.add_component(Behavior_Orbiter(1, orbit_distance=50))
 
@@ -37,8 +31,14 @@ if __name__ == "__main__":
 
     # World Creation and Spinning
 
-    world = World(entitylist=entity_list)
+    # world = World(entitylist=entity_list)
+    # world.save()
+
+    world = World()
+    world.load()
+
     print("Spinning up the world!")
+
     world.spin(debugging=True)
 
 
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # entity_list = [Asteroid(1,velocity=(1,1)), Asteroid(2,velocity=(1,0),component_forces={"test":(-0.5,0)})] # This one is for ForceSystem and MovementSystem
 
 
-    
+
     # entity_list = [Rock(1,position=(0,0),velocity=(0,0),mass=1e21,radius=10), Rock(2,position=(0,-50),velocity=(40,0),mass=1e5,radius=5)] # This one is for GravitySystem
 
 
