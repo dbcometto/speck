@@ -19,6 +19,9 @@ class Entity:
     def get(self, component_type):
         return self.components.get(component_type)
     
+    def has(self, component_type):
+        return True if self.get(component_type) else False
+    
     
     
 
@@ -37,8 +40,8 @@ class Rock(Entity):
 class Agent(Rock):
     def __init__(self,entity_id,position=(0,0),velocity=(0,0),component_forces=None,mass=1,width=1,max_thrust=1):
         super().__init__(entity_id,position,velocity,component_forces,mass)
-        self.remove_component(Radius)
         self.add_component(Width(width=width))
+        self.add_component(Radius(radius=width))
         self.add_component(Thruster(max_thrust=max_thrust))
 
 class Orbiter(Agent):

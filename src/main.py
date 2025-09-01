@@ -21,14 +21,14 @@ if __name__ == "__main__":
     fred = Agent(3,position=(60,0),velocity=(0,20),mass=1,max_thrust=50,width=3)
     fred.add_component(Behavior_Orbiter(1, orbit_distance=50))
 
-    bob = Agent(4,position=(0,-60),velocity=(0,0),mass=1,max_thrust=50,width=3)
-    bob.add_component(Behavior_Orbiter(2, orbit_distance=15))
+    # bob = Agent(4,position=(0,-60),velocity=(0,0),mass=1,max_thrust=50,width=3)
+    # bob.add_component(Behavior_Orbiter(2, orbit_distance=15))
 
     entity_list = [
         Rock(1,position=(0,0),velocity=(0,0),mass=1e21,radius=10), 
         Rock(2,position=(0,-50),velocity=(40,0),mass=1e5,radius=5),
+        Rock(4,position=(0,50),velocity=(-10,0),mass=1,radius=1),
         fred,
-        bob,
         ]
 
 
@@ -60,4 +60,15 @@ if __name__ == "__main__":
     #     bob,
     #     ]
     
-    
+    # fred = Agent(3,position=(60,0),velocity=(0,20),mass=1,max_thrust=50,width=3)
+    # fred.add_component(Behavior_Orbiter(1, orbit_distance=50))
+
+    # # bob = Agent(4,position=(0,-60),velocity=(0,0),mass=1,max_thrust=50,width=3)
+    # # bob.add_component(Behavior_Orbiter(2, orbit_distance=15))
+
+    # entity_list = [
+    #     Rock(1,position=(0,0),velocity=(0,0),mass=1e21,radius=10), 
+    #     Rock(2,position=(0,-50),velocity=(40,0),mass=1e5,radius=5),
+    #     Rock(4,position=(0,50),velocity=(-10,0),mass=1,radius=1),
+    #     fred,
+    #     ]
