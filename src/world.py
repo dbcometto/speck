@@ -2,7 +2,8 @@
 import time
 
 from entities import Rock, Agent
-from components import Position, Velocity, Acceleration, Radius, Forces
+from components import Position, Velocity, Acceleration, Radius, Forces, Thruster
+from components import Behavior_Orbiter
 from systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup, RenderGroup 
 
 
@@ -53,4 +54,12 @@ class World:
 
     def debugPrints(self):
         for e in self.entities:
-            print(f"{type(e)} {e.id}: {e.get(Forces).components}")
+            continue
+        
+            # print(f"{type(e)} {e.id}: {e.get(Forces).components}")
+
+            # behaviorOrbiter = e.get(Behavior_Orbiter)
+            # thruster = e.get(Thruster)
+            # if behaviorOrbiter:
+            #     print(f"{type(e)} {e.id}: {behaviorOrbiter.orbit_id},{behaviorOrbiter.orbit_distance}")
+            #     print(f"{type(e)} {e.id}: {(thruster.desired_thrust_x,thruster.desired_thrust_y)}")

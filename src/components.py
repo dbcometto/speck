@@ -61,6 +61,6 @@ class Behavior_RandomThruster:
 
 
 class Behavior_Orbiter:
-    def __init__(self,orbit_id, vel_tolerance = 0.5):
+    def __init__(self,orbit_id,orbit_distance,vel_tolerance = 0.5):
         self.orbit_id = orbit_id
-        self.vel_tolerance = vel_tolerance
+        self.orbit_distance = orbit_distance

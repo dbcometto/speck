@@ -88,9 +88,6 @@ class GravitySystem:
 
         for i1,e1 in enumerate(entities):
             for e2 in entities[i1+1:]: #enumerate(entities[i1+1:],start=i1+1):
-                    print(f"{e1.id} and {e2.id}")
-                    pos1 = e1.get(Position)
-                    pos2 = e2.get(Position)
                     m1 = e1.get(Mass).mass
                     m2 = e2.get(Mass).mass
                     forces1 = e1.get(Forces)
@@ -162,7 +159,8 @@ class BehaviorGroup(System):
 class SimpleOrbiterSystem(System):
     def __init__(self):
         self.G = G
-        self.kp = 5
+        self.kpt = 1
+        self.kpr = 1
 
     def update(self, entities, entities_by_id):
         for e in entities:
@@ -176,26 +174,49 @@ class SimpleOrbiterSystem(System):
             if behaviorOrbiter and forces and thruster and vel:
                 eO = entities_by_id[behaviorOrbiter.orbit_id]
                 M = eO.get(Mass)
+                
+                mass = e.get(Mass)
+                mass = mass.mass if mass else None
 
-                if M:
-                    d,(dx,dy),(ux,uy) = calc_distance(e,eO)
+                d_desired = behaviorOrbiter.orbit_distance
 
-                    v_needed = math.sqrt(self.G*M.mass/d)
-                    v_needed_x = -dy/d*v_needed
-                    v_needed_y = dx/d*v_needed
+                if M and mass:
+                    d,(dx,dy),(ux,uy) = calc_distance(eO,e)
+                    
+                    # make unit vectors
+                    urx,ury = ux,uy
+                    utx,uty = -ury,urx
 
-                    thruster.throttle = 1
+                    # calculate desired circular velocity
+                    v_needed = math.sqrt(self.G*M.mass/d_desired)
 
-                    error_x = v_needed_x - vel.x
-                    error_y = v_needed_y - vel.y
+                    # calculate current velocity in terms of r/t frame
+                    vr = vel.x * urx + vel.y * ury
+                    vt = vel.x * utx + vel.y * uty
 
-                    if error_x + error_y > behaviorOrbiter.vel_tolerance:
+                    # radial controller
+                    error_r = d_desired - d
+                    ar = self.kpr*error_r
 
-                        thrust_needed_x = self.kp*error_x
-                        thrust_needed_y = self.kp*error_y
+                    # tangential controller
+                    vt_needed = v_needed
+                    error_vt = vt_needed - vt
+                    at = self.kpt*error_vt
 
-                        thruster.desired_thrust_x = -thrust_needed_x
-                        thruster.desired_thrust_y = -thrust_needed_y
+                    # Calculate forces
+                    Fr = mass*ar
+                    Ft = mass*at
+
+                    # Change coords back
+                    Fx = Fr*urx + Ft*utx
+                    Fy = Fr*ury + Ft*uty
+                    Fmag = math.hypot(Fx**2+Fy**2)
+
+                    thruster.throttle = min(1.0, Fmag/thruster.max_thrust if thruster.max_thrust > 0 else 0)
+                    thruster.desired_thrust_x = Fx/Fmag if Fmag > 0 else 0
+                    thruster.desired_thrust_y = Fy/Fmag if Fmag > 0 else 0
+
+                    print(f"d: {d:4.2f} | vt: {vt:4.2f} | verror: {error_vt:4.2f}")
 
 
 
@@ -228,6 +249,9 @@ class RenderSystem(System):
 
         self.thruster_scale = 1.3
         self.thruster_width = 1.8
+
+        self.vel_scale = 0.6
+        self.vel_width = 1.2
         
 
     def update(self, entities, entities_by_id):
@@ -236,6 +260,8 @@ class RenderSystem(System):
 
         for e in entities:
             pos = e.get(Position)
+            vel = e.get(Velocity)
+
             radius = e.get(Radius)
             width = e.get(Width)
             width = width.width if width else None
@@ -251,6 +277,10 @@ class RenderSystem(System):
                     arrow = FancyArrowPatch((pos.x, pos.y), (pos.x - thruster.thrust_x*self.thruster_scale, pos.y - thruster.thrust_y*self.thruster_scale), arrowstyle='-', mutation_scale=100, color="#FF7038", linewidth=self.thruster_width)
                     self.ax.add_patch(arrow)
 
+                if vel:
+                    arrow = FancyArrowPatch((pos.x, pos.y), (pos.x + vel.x*self.vel_scale, pos.y + vel.y*self.vel_scale), arrowstyle='->', mutation_scale=20, color="#38FF74", linewidth=self.vel_width)
+                    self.ax.add_patch(arrow)
+
                 circle = plt.Rectangle((pos.x-width/2, pos.y-width/2), width,width, color="#4EDAC2")
                 self.ax.add_patch(circle)
 
@@ -258,4 +288,4 @@ class RenderSystem(System):
 
 
         plt.draw()
-        self.fig.canvas.flush_events()  # small pause to update plot
+        self.fig.canvas.flush_events()
