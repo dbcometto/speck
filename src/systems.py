@@ -167,7 +167,7 @@ class CollisionSystem:
                                 v2.x -= v2_tangent*utx*self.friction_coeff
                                 v2.y -= v2_tangent*uty*self.friction_coeff
 
-                                print(f"{time.time()}: Collision between {e1.id} and {e2.id} with overlap {overlap:4.2f} | New v1 ({v1.x:4.2f},{v1.y:4.2f}) and v2 ({v2.x:4.2f},{v2.y:4.2f}) | \nNew distance {calc_distance(e1,e2)[0]:4.2f}")
+                                # print(f"{time.time()}: Collision between {e1.id} and {e2.id} with overlap {overlap:4.2f} | New v1 ({v1.x:4.2f},{v1.y:4.2f}) and v2 ({v2.x:4.2f},{v2.y:4.2f}) | \nNew distance {calc_distance(e1,e2)[0]:4.2f}")
                                 
 
 
