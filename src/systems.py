@@ -249,7 +249,7 @@ class SimpleOrbiterSystem(System):
     def __init__(self):
 
         self.kpt = 1
-        self.kpr = 1
+        self.kpr = 0.2
 
     def update(self, entities, entities_by_id):
         for e in entities:
