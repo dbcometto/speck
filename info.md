@@ -1,9 +1,11 @@
 # Notes
 
 ## TODO
-- [ ] Fix factory functions  
+- [x] Fix factory functions 
+- [ ] Add tests 
 - [ ] Pull Matplotlib renderer out into a renderer file
 - [ ] Replace Matplotlib with Pyglet
+
 
 
 ## Status

@@ -4,7 +4,7 @@ import json
 import random
 import math
 
-from entities import Entity, Rock, Agent
+from entities import Entity
 from components import Position, Velocity, Acceleration, Radius, Forces, Thruster
 from components import Behavior_Orbiter
 from systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup, RenderGroup 

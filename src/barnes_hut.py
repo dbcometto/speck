@@ -1,6 +1,7 @@
 import math
-from entities import Rock
+from entities import Entity
 from components import Mass, Position, Forces
+from factories import create_rock, create_agent
 
 
 class Body:
@@ -125,10 +126,10 @@ if __name__ == "__main__":
     # Create some bodies
 
     entities = [
-        Rock(1,(0,0),mass=10),
-        Rock(2,(1,1),mass=10),
-        Rock(3,(-2,2),mass=10),
-        Rock(4,(5,10),mass=10)
+        create_rock(1,(0,0),mass=10),
+        create_rock(2,(1,1),mass=10),
+        create_rock(3,(-2,2),mass=10),
+        create_rock(4,(5,10),mass=10)
     ]
 
     x_min = min(e.get(Position).x if e.has(Position) else None for e in entities)

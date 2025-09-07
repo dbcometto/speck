@@ -6,24 +6,27 @@ import math
 import signal, sys
 signal.signal(signal.SIGINT, lambda sig, frame: sys.exit(0))
 
-from entities import Rock, Agent
+from entities import Entity
 from world import World
 from components import Behavior_Orbiter
 import config
+
+from factories import create_rock, create_agent
 
     
 
 if __name__ == "__main__":
 
-    fred = Agent(3,position=(500,0),velocity=(0,20),mass=1,max_thrust=50,width=3)
+    fred = create_agent(3,position=(500,0),velocity=(0,20),mass=1,max_thrust=50,radius=3)
     fred.add_component(Behavior_Orbiter(1, orbit_distance=800))
 
-    bob = Agent(4,position=(-60,),velocity=(10,-10),mass=1,max_thrust=50,width=3)
+    bob = create_agent(4,position=(-60,),velocity=(10,-10),mass=1,max_thrust=50,radius=3)
     # bob.add_component(Behavior_Orbiter(2, orbit_distance=15))
 
     entity_list = [
-        Rock(1,position=(0,0),velocity=(0,0),mass=9e17,radius=473), 
-        Rock(2,position=(0,-1000),velocity=(math.sqrt(config.G*9e17/1000),0),mass=1e5,radius=5),
+        create_rock(1,position=(0,0),velocity=(0,0),mass=9e17,radius=473), 
+        create_rock(2,position=(0,-1000),velocity=(math.sqrt(config.G*9e17/1000),0),mass=1e8,radius=20),
+        create_rock(2,position=(0,600),velocity=(0,0),mass=1e4,radius=10),
         fred,
         bob,
         ]
@@ -37,7 +40,7 @@ if __name__ == "__main__":
     # world = World()
     # world.generate()
 
-    # world = World(worldpath="worlds/physics_test_world.json",timewarp=0.001,hz=600)
+    # world = World(worldpath="worlds/physics_test_world.json",timewarp=1,hz=60)
     # world.load()
 
     print("Spinning up the world!")

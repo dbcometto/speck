@@ -13,8 +13,9 @@ from components import Position, Velocity, Acceleration, Forces
 from components import Radius, Mass, Width
 from components import Thruster
 from components import Behavior_Orbiter, Behavior_RandomThruster
+from components import RenderData
 
-from entities import Rock, Agent
+from entities import Entity
 
 from barnes_hut import QuadNode, compute_force
 
@@ -143,55 +144,55 @@ class CollisionSystem:
         for i1,e1 in enumerate(entities):
             for e2 in entities[i1+1:]:
                     # print(f"Checking collision between {e1.id} and {e2.id}")
-                    if not (type(e1)==Agent and type(e2)==Agent):
-                        m1 = e1.get(Mass)
-                        m2 = e2.get(Mass)
-                        v1 = e1.get(Velocity)
-                        v2 = e2.get(Velocity)
-                        r1 = e1.get(Radius)
-                        r2 = e2.get(Radius)
-                        pos1 = e1.get(Position)
-                        pos2 = e2.get(Position)
+                    # if not (type(e1)==Agent and type(e2)==Agent):
+                    m1 = e1.get(Mass)
+                    m2 = e2.get(Mass)
+                    v1 = e1.get(Velocity)
+                    v2 = e2.get(Velocity)
+                    r1 = e1.get(Radius)
+                    r2 = e2.get(Radius)
+                    pos1 = e1.get(Position)
+                    pos2 = e2.get(Position)
 
 
-                        if all([m1, m2, v1, v2, r1, r2, pos1, pos2]):
+                    if all([m1, m2, v1, v2, r1, r2, pos1, pos2]):
 
-                            m1 = m1.mass * config.mass_unit_factor
-                            m2 = m2.mass * config.mass_unit_factor
-                            r1 = r1.radius
-                            r2 = r2.radius
+                        m1 = m1.mass * config.mass_unit_factor
+                        m2 = m2.mass * config.mass_unit_factor
+                        r1 = r1.radius
+                        r2 = r2.radius
 
-                            d,(dx,dy),(unx,uny) = calc_distance(e1,e2)
-                            utx,uty = -uny,unx
+                        d,(dx,dy),(unx,uny) = calc_distance(e1,e2)
+                        utx,uty = -uny,unx
 
-                            d_min = r2+r1
-                            if d <= d_min:
-                                # clamp positions by mass
-                                total_mass = m1 + m2
-                                overlap = d_min-d
-                                pos1.x -= unx * overlap * (m2 / total_mass)
-                                pos1.y -= uny * overlap * (m2 / total_mass)
-                                pos2.x += unx * overlap * (m1 / total_mass)
-                                pos2.y += uny * overlap * (m1 / total_mass)
+                        d_min = r2+r1
+                        if d <= d_min:
+                            # clamp positions by mass
+                            total_mass = m1 + m2
+                            overlap = d_min-d
+                            pos1.x -= unx * overlap * (m2 / total_mass)
+                            pos1.y -= uny * overlap * (m2 / total_mass)
+                            pos2.x += unx * overlap * (m1 / total_mass)
+                            pos2.y += uny * overlap * (m1 / total_mass)
 
-                                # Elastic collision
-                                v_rel = (v1.x - v2.x)*unx + (v1.y - v2.y)*uny
-                                impulse = ((self.restitution+1) * v_rel) / (1/m1 + 1/m2)
+                            # Elastic collision
+                            v_rel = (v1.x - v2.x)*unx + (v1.y - v2.y)*uny
+                            impulse = ((self.restitution+1) * v_rel) / (1/m1 + 1/m2)
 
-                                v1.x -= (impulse / m1) * unx
-                                v1.y -= (impulse / m1) * uny
-                                v2.x += (impulse / m2) * unx
-                                v2.y += (impulse / m2) * uny
+                            v1.x -= (impulse / m1) * unx
+                            v1.y -= (impulse / m1) * uny
+                            v2.x += (impulse / m2) * unx
+                            v2.y += (impulse / m2) * uny
 
-                                # Some friction
-                                v1_tangent = v1.x*utx + v1.y*uty
-                                v2_tangent = v2.x*utx + v2.y*uty
-                                v1.x -= v1_tangent*utx*self.friction_coeff
-                                v1.y -= v1_tangent*uty*self.friction_coeff
-                                v2.x -= v2_tangent*utx*self.friction_coeff
-                                v2.y -= v2_tangent*uty*self.friction_coeff
+                            # Some friction
+                            v1_tangent = v1.x*utx + v1.y*uty
+                            v2_tangent = v2.x*utx + v2.y*uty
+                            v1.x -= v1_tangent*utx*self.friction_coeff
+                            v1.y -= v1_tangent*uty*self.friction_coeff
+                            v2.x -= v2_tangent*utx*self.friction_coeff
+                            v2.y -= v2_tangent*uty*self.friction_coeff
 
-                                # print(f"{time.time()}: Collision between {e1.id} and {e2.id} with overlap {overlap:4.2f} | New v1 ({v1.x:4.2f},{v1.y:4.2f}) and v2 ({v2.x:4.2f},{v2.y:4.2f}) | \nNew distance {calc_distance(e1,e2)[0]:4.2f}")
+                            # print(f"{time.time()}: Collision between {e1.id} and {e2.id} with overlap {overlap:4.2f} | New v1 ({v1.x:4.2f},{v1.y:4.2f}) and v2 ({v2.x:4.2f},{v2.y:4.2f}) | \nNew distance {calc_distance(e1,e2)[0]:4.2f}")
                                 
 
 
@@ -427,11 +428,13 @@ class RenderSystem(System):
 
             thruster = e.get(Thruster)
 
-            if pos and radius and type(e)==Rock:
-                circle = plt.Circle((pos.x, pos.y), radius.radius, color='#666666')
-                self.ax.add_patch(circle)
+            render = e.get(RenderData)
 
-            if pos and width and type(e)==Agent:
+            if pos and radius and render.shape=="circle":
+                shape = plt.Circle((pos.x, pos.y), radius.radius, color='#666666')
+                self.ax.add_patch(shape)
+
+            if pos and width and render.shape=="rectangle":
                 if thruster:
                     arrow = FancyArrowPatch((pos.x, pos.y), (pos.x - thruster.thrust_x*self.thruster_scale, pos.y - thruster.thrust_y*self.thruster_scale), arrowstyle='-', mutation_scale=100, color="#FF7038", linewidth=self.thruster_width)
                     self.ax.add_patch(arrow)
@@ -440,8 +443,8 @@ class RenderSystem(System):
                     arrow = FancyArrowPatch((pos.x, pos.y), (pos.x + vel.x*self.vel_scale, pos.y + vel.y*self.vel_scale), arrowstyle='-', mutation_scale=20, color="#38FF74", linewidth=self.vel_width)
                     self.ax.add_patch(arrow)
 
-                circle = plt.Rectangle((pos.x-width/2, pos.y-width/2), width,width, color="#4EDAC2")
-                self.ax.add_patch(circle)
+                shape = plt.Rectangle((pos.x-width/2, pos.y-width/2), width,width, color="#4EDAC2")
+                self.ax.add_patch(shape)
 
                 
 

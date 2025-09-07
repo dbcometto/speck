@@ -66,6 +66,13 @@ class Behavior_Orbiter:
         self.orbit_distance = orbit_distance
 
 
+# Render Attributes
+class RenderData:
+    def __init__(self,shape="circle",color="#FF11EE"):
+        self.shape = shape
+        self.color = color
+
+
 
 
 component_types = {
@@ -79,4 +86,5 @@ component_types = {
     "Thruster"                  : Thruster,
     "Behavior_RandomThruster"   : Behavior_RandomThruster,
     "Behavior_Orbiter"          : Behavior_Orbiter,
+    "RenderData"                : RenderData,
 }
