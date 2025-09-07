@@ -1,0 +1,9 @@
+LICENSE
+README.md
+pyproject.toml
+setup.cfg
+src/speck.egg-info/PKG-INFO
+src/speck.egg-info/SOURCES.txt
+src/speck.egg-info/dependency_links.txt
+src/speck.egg-info/top_level.txt
+tests/test_components.py

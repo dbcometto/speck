@@ -1,4 +1,9 @@
 # Notes
+Tests require installing the root as a package:
+```bash
+pip install -e .
+```
+
 
 ## TODO
 - [x] Fix factory functions 
