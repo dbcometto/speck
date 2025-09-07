@@ -35,3 +35,4 @@
 ### Rendering
 - Currently handled as a system... not ideal
 - In Matplotlib... cannot handle asteroid field, but good enough for a few test entities
+- Pyglet is a good option
