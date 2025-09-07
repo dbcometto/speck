@@ -8,20 +8,20 @@ class Position:
         self.y = y                          # in km
 
 class Velocity:
-    def __init__(self,vx=0,vy=0):
-        self.x = vx                         # in km/s
-        self.y = vy                         # in km/s
+    def __init__(self,x=0,y=0):
+        self.x = x                         # in km/s
+        self.y = y                         # in km/s
 
 class Acceleration:
-    def __init__(self,ax=0,ay=0):
-        self.x = ax                         # in km/s^2
-        self.y = ay                         # in km/s^2
+    def __init__(self,x=0,y=0):
+        self.x = x                         # in km/s^2
+        self.y = y                         # in km/s^2
 
 class Forces:
-    def __init__(self,components={}):
-        self.components = components        # dictionary of form {"force_name":(fx,fy)}
-        self.total_x = 0                    # in MN = t km/s^2
-        self.total_y = 0                    # in MN = t km/s^2
+    def __init__(self,components=None,total_x=0,total_y=0):
+        self.components = components if components else {}        # dictionary of form {"force_name":(fx,fy)}
+        self.total_x = total_x                    # in MN = t km/s^2
+        self.total_y = total_y                    # in MN = t km/s^2
 
 
 
@@ -44,13 +44,13 @@ class Width:
 # More things
 
 class Thruster:
-    def __init__(self,max_thrust=1):
+    def __init__(self,max_thrust=1,thrust_x=0,thrust_y=0,desired_thrust_x=0,desired_thrust_y=0,throttle=0):
         self.max_thrust = max_thrust
-        self.thrust_x = 0
-        self.thrust_y = 0
-        self.desired_thrust_x = 0
-        self.desired_thrust_y = 0
-        self.throttle=0
+        self.thrust_x = thrust_x
+        self.thrust_y = thrust_y
+        self.desired_thrust_x = desired_thrust_x
+        self.desired_thrust_y = desired_thrust_y
+        self.throttle = throttle
 
 
 # AI Attributes
@@ -61,6 +61,22 @@ class Behavior_RandomThruster:
 
 
 class Behavior_Orbiter:
-    def __init__(self,orbit_id,orbit_distance,vel_tolerance = 0.5):
+    def __init__(self,orbit_id,orbit_distance):
         self.orbit_id = orbit_id
         self.orbit_distance = orbit_distance
+
+
+
+
+component_types = {
+    "Position"                  : Position,
+    "Velocity"                  : Velocity,
+    "Acceleration"              : Acceleration,
+    "Forces"                    : Forces,
+    "Radius"                    : Radius,
+    "Mass"                      : Mass,
+    "Width"                     : Width,
+    "Thruster"                  : Thruster,
+    "Behavior_RandomThruster"   : Behavior_RandomThruster,
+    "Behavior_Orbiter"          : Behavior_Orbiter,
+}
