@@ -101,7 +101,8 @@ class World:
     def add_entity(self,entity):
         self.entities.append(entity)
 
-
+    def remove_entity(self,entity):
+        self.entities.pop(entity)
 
     def generate(self,boundary=1000,max_rocks=100,max_iterations=100):
         for i in range(max_rocks):

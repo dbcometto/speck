@@ -67,6 +67,17 @@ class Behavior_Orbiter:
 
 
 
+# Rendering
+
+class Render_Data:
+    def __init__(self,shape,color):
+        self.shape = shape
+        self.color = color
+
+
+
+
+
 
 component_types = {
     "Position"                  : Position,
@@ -79,4 +90,5 @@ component_types = {
     "Thruster"                  : Thruster,
     "Behavior_RandomThruster"   : Behavior_RandomThruster,
     "Behavior_Orbiter"          : Behavior_Orbiter,
+    "Render_Data"               : Render_Data,
 }

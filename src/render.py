@@ -4,30 +4,69 @@ import pyglet
 from pyglet import shapes
 
 from world import World
+from entities import Entity
+from factories import Factory
 
 
-class SpeckWindow(pyglet.window.Window):
+class PygletRenderer:
+    def __init__(self,world):
 
-    def __init__(self, width=800, height=600):
-        super().__init__(width, height, "Pyglet Class Example")
+        self.world = world
+
+        self.entity_shapes = {}
+
+        # set up renderer
+        self.window = pyglet.window.Window(800, 600, "Speck")
         self.batch = pyglet.graphics.Batch()
-        self.circle = shapes.Circle(200, 300, 50, color=(50, 225, 30), batch=self.batch)
+        
 
-        pyglet.clock.schedule_interval(self.update, 1/60.0)
+        # Register events
+        self.window.push_handlers(
+            on_draw=self.on_draw,
+        )
+
+    def sync_shapes(self):
+        """Create a Pyglet shape for a new entity."""
+        for entity in self.world.entities:
+            render = entity.get('Render_Data')
+            pos = entity.get('Position')
+            radius = entity.get('Radius')
+
+            if render and pos and radius:
+
+                pyg_color = (int(render.color[1:3],16),
+                             int(render.color[3:5],16),
+                             int(render.color[5:7],16))
+
+                if render.shape_type == 'circle':
+                    shape = shapes.Circle(pos.x, pos.y, radius=radius.radius, color=pyg_color, batch=self.batch)
+
+                elif render.shape_type == 'rectangle':
+                    shape = shapes.Rectangle(pos.x, pos.y, width=radius.radius, height=radius.radius, color=pyg_color, batch=self.batch)
+
+                self.entity_shapes[entity] = shape
 
     def on_draw(self):
-        self.clear()
+        """Draw all the entities."""
+        self.window.clear()
+        self.sync_shapes()
+
+        # for entity, shape in self.entity_shapes.items():
+        #     pos = entity.get('Position')
+        #     if pos:
+        #         shape.x = pos.x
+        #         shape.y = pos.y
+
         self.batch.draw()
 
-    def update(self, dt):
-        self.circle.x += 100 * dt
-        if self.circle.x > self.width + self.circle.radius:
-            self.circle.x = -self.circle.radius
-
-    def on_key_press(self, symbol, modifiers):
-        print(f"Key pressed: {symbol}")
 
 # Run the app
 if __name__ == "__main__":
-    window = SpeckWindow()
+
+    world = World()
+    e = Factory.create_rock(0,position=(300,300),radius=100)
+    world.add_entity(e)
+
+    renderer = PygletRenderer(world)
+
     pyglet.app.run()

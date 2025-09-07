@@ -4,6 +4,9 @@ from components import component_types
 from components import Position, Velocity, Acceleration, Forces
 from components import Radius, Mass, Width
 from components import Thruster, Behavior_Orbiter
+from components import Render_Data
+
+from pyglet import shapes
 
 # Next, create entities
 class Entity:
@@ -67,6 +70,7 @@ class Rock(Entity):
         self.add_component(Forces({} if component_forces is None else component_forces))
         self.add_component(Radius(radius))
         self.add_component(Mass(mass))
+        self.add_component(Render_Data(shape="Circle", color='#666666'))
 
 
 class Agent(Rock):
