@@ -31,7 +31,6 @@ class Entity:
             # Store the component type as a string and use its own to_dict method
             comp_dict[comp_type.__name__] = comp.__dict__
         return {
-                "class": type(self).__name__,
                 "id": self.id, 
                 "components": comp_dict
                 }
@@ -42,8 +41,7 @@ class Entity:
         Reconstruct entity from dict.
         component_classes: dict mapping component type name (str) -> class
         """
-        entity_cls = entity_types[data["class"]]
-        entity = entity_cls(data["id"])
+        entity = Entity(data["id"])
         for comp_name, comp_attrs in data["components"].items():
             # Use globals() to find the component class
             comp_cls = component_types[comp_name]  # assumes the class exists in the current module
