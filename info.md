@@ -4,6 +4,9 @@ Tests require installing the root as a package:
 pip install -e .
 ```
 
+## Next Steps:
+Fix gravity unit test... not sure what's up with it.  Then finish testing the systems and start working on the renderer.
+
 
 ## TODO
 - [x] Fix factory functions 
