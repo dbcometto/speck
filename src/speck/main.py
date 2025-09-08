@@ -6,12 +6,12 @@ import math
 import signal, sys
 signal.signal(signal.SIGINT, lambda sig, frame: sys.exit(0))
 
-from entities import Entity
-from world import World
-from components import Behavior_Orbiter
-import config
+from .entities import Entity
+from .world import World
+from .components import Behavior_Orbiter
+from .config import G
 
-from factories import create_rock, create_agent
+from .factories import create_rock, create_agent
 
     
 
@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
     entity_list = [
         create_rock(1,position=(0,0),velocity=(0,0),mass=9e17,radius=473), 
-        create_rock(2,position=(0,-1000),velocity=(math.sqrt(config.G*9e17/1000),0),mass=1e8,radius=20),
+        create_rock(2,position=(0,-1000),velocity=(math.sqrt(G*9e17/1000),0),mass=1e8,radius=20),
         create_rock(2,position=(0,600),velocity=(0,0),mass=1e4,radius=10),
         fred,
         bob,

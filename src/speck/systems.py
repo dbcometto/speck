@@ -6,18 +6,18 @@ import time
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch
 
-from utils import calc_distance
-import config
+from .utils import calc_distance
+from .config import G, mass_unit_factor
 
-from components import Position, Velocity, Acceleration, Forces
-from components import Radius, Mass, Width
-from components import Thruster
-from components import Behavior_Orbiter, Behavior_RandomThruster
-from components import RenderData
+from .components import Position, Velocity, Acceleration, Forces
+from .components import Radius, Mass
+from .components import Thruster
+from .components import Behavior_Orbiter
+from .components import RenderData
 
-from entities import Entity
+from .entities import Entity
 
-from barnes_hut import QuadNode, compute_force
+from .barnes_hut import QuadNode, compute_force
 
 class System:
     def update(self, entities, entities_by_id):
@@ -45,7 +45,7 @@ class DynamicsGroup(System):
 
 
 class MovementSystem(System):
-    def __init__(self,dt):
+    def __init__(self,dt=1):
         self.dt = dt
 
     def update(self,entities, entities_by_id):
@@ -112,8 +112,7 @@ class GravitySystem:
 
         # Compute forces
         for e in entities:
-            compute_force(e, root, G=config.G, theta=10000, eps=self.epsilon)
-            # print(f"{type(e)} {e.id}: force=({e.get(Forces).components})")
+            compute_force(e, root, G=G, theta=0.5, eps=self.epsilon)
 
         # # O(n^2)
         # for i1,e1 in enumerate(entities):
@@ -157,8 +156,8 @@ class CollisionSystem:
 
                     if all([m1, m2, v1, v2, r1, r2, pos1, pos2]):
 
-                        m1 = m1.mass * config.mass_unit_factor
-                        m2 = m2.mass * config.mass_unit_factor
+                        m1 = m1.mass * mass_unit_factor
+                        m2 = m2.mass * mass_unit_factor
                         r1 = r1.radius
                         r2 = r2.radius
 
@@ -215,16 +214,10 @@ class ThrusterSystem(System):
         for e in entities:
             thruster = e.get(Thruster)
             forces = e.get(Forces)
-            behaviorRandom = e.get(Behavior_RandomThruster)
 
             if thruster and forces:
-
-                if behaviorRandom:
-                    thrust_x = random.random()-0.5
-                    thrust_y = random.random()-0.5
-                else:
-                    thrust_x = thruster.desired_thrust_x
-                    thrust_y = thruster.desired_thrust_y
+                thrust_x = thruster.desired_thrust_x
+                thrust_y = thruster.desired_thrust_y
 
                 norm = math.sqrt(thrust_x**2 + thrust_y**2)
 
@@ -278,7 +271,7 @@ class SimpleOrbiterSystem(System):
                     utx,uty = -ury,urx
 
                     # calculate desired circular velocity
-                    v_needed = math.sqrt(config.G*M.mass/d_desired)
+                    v_needed = math.sqrt(G*M.mass/d_desired)
 
                     # calculate current velocity in terms of r/t frame
                     vr = vel.x * urx + vel.y * ury
@@ -423,8 +416,6 @@ class RenderSystem(System):
             vel = e.get(Velocity)
 
             radius = e.get(Radius)
-            width = e.get(Width)
-            width = width.width if width else None
 
             thruster = e.get(Thruster)
 
@@ -434,7 +425,9 @@ class RenderSystem(System):
                 shape = plt.Circle((pos.x, pos.y), radius.radius, color='#666666')
                 self.ax.add_patch(shape)
 
-            if pos and width and render.shape=="rectangle":
+            if pos and radius and render.shape=="rectangle":
+                radius = radius.radius
+
                 if thruster:
                     arrow = FancyArrowPatch((pos.x, pos.y), (pos.x - thruster.thrust_x*self.thruster_scale, pos.y - thruster.thrust_y*self.thruster_scale), arrowstyle='-', mutation_scale=100, color="#FF7038", linewidth=self.thruster_width)
                     self.ax.add_patch(arrow)
@@ -443,7 +436,7 @@ class RenderSystem(System):
                     arrow = FancyArrowPatch((pos.x, pos.y), (pos.x + vel.x*self.vel_scale, pos.y + vel.y*self.vel_scale), arrowstyle='-', mutation_scale=20, color="#38FF74", linewidth=self.vel_width)
                     self.ax.add_patch(arrow)
 
-                shape = plt.Rectangle((pos.x-width/2, pos.y-width/2), width,width, color="#4EDAC2")
+                shape = plt.Rectangle((pos.x-radius/2, pos.y-radius/2), radius, radius, color="#4EDAC2")
                 self.ax.add_patch(shape)
 
                 

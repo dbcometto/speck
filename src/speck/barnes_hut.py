@@ -1,16 +1,7 @@
 import math
-from entities import Entity
-from components import Mass, Position, Forces
-from factories import create_rock, create_agent
-
-
-class Body:
-    def __init__(self, x, y, mass):
-        self.x = x
-        self.y = y
-        self.mass = mass
-        self.fx = 0.0
-        self.fy = 0.0
+from .entities import Entity
+from .components import Mass, Position, Forces
+from .factories import create_rock, create_agent
 
 class QuadNode:
     def __init__(self, x_min, x_max, y_min, y_max):
@@ -83,7 +74,7 @@ def compute_force(entity, node, G=1.0, theta=0.5, eps=0.01):
     pos = entity.get(Position)
     forces = entity.get(Forces)
 
-    if not mass and pos:
+    if not (mass and pos):
         return
     
     mass = mass.mass
