@@ -9,9 +9,7 @@ Fix gravity unit test... not sure what's up with it.  Then finish testing the sy
 
 
 ## TODO
-- [x] Fix factory functions
-- [x] Pull Matplotlib renderer out into a renderer file
-- [x] Replace Matplotlib with Pyglet
+- [ ] Make physics perform better for large numbers of entities
 - [ ] Finish adding tests 
 
 
