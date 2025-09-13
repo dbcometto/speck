@@ -7,9 +7,9 @@ import math
 from .entities import Entity
 from .components import Position, Velocity, Acceleration, Radius, Forces, Thruster
 from .components import Behavior_Orbiter
-from .systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup, RenderGroup 
+from .systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup
 from .factories import create_rock, create_agent
-
+from .render import RenderGroup
 
 
 class World:
