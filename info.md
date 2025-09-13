@@ -9,10 +9,10 @@ Fix gravity unit test... not sure what's up with it.  Then finish testing the sy
 
 
 ## TODO
-- [x] Fix factory functions 
-- [ ] Add tests 
+- [x] Fix factory functions
 - [ ] Pull Matplotlib renderer out into a renderer file
 - [ ] Replace Matplotlib with Pyglet
+- [ ] Finish adding tests 
 
 
 
@@ -37,6 +37,9 @@ Fix gravity unit test... not sure what's up with it.  Then finish testing the sy
 - Rendering is currently included
 - Efficient gravity is implemented
 
+### Unit Tests
+- with `pytest`
+- Most things are "tested" but not the systems, the only thing that really needs to be tested...
 
 
 
