@@ -1,5 +1,6 @@
 # Here systems are defined
 import math
+import time
 
 from .utils import calc_distance
 from .config import G, mass_unit_factor
@@ -33,10 +34,11 @@ class DynamicsGroup(System):
         
 
     def update(self, entities, entities_by_id):
-        
         for system in self.systems:
+            t0 = time.perf_counter()
             system.update(entities,entities_by_id)
-        
+            t1 = time.perf_counter()
+            print(f"{type(system)}: {t1-t0:8.4f}")
 
 
 class MovementSystem(System):
@@ -112,64 +114,98 @@ class GravitySystem:
 
 
 class CollisionSystem:
-    def __init__(self,restitution=0.5,friction_coeff=0.7):
+    def __init__(self,restitution=0.5,friction_coeff=0.7,cell_size=100):
         self.restitution = restitution
         self.friction_coeff = friction_coeff
+        self.cell_size = cell_size
 
     def update(self,entities, entities_by_id):
-        """Apply 2D elastic collisions between rocks and rocks or agents and rocks"""
-        for i1,e1 in enumerate(entities):
-            for e2 in entities[i1+1:]:
-                    # print(f"Checking collision between {e1.id} and {e2.id}")
-                    # if not (type(e1)==Agent and type(e2)==Agent):
-                    m1 = e1.get(Mass)
-                    m2 = e2.get(Mass)
-                    v1 = e1.get(Velocity)
-                    v2 = e2.get(Velocity)
-                    r1 = e1.get(Radius)
-                    r2 = e2.get(Radius)
-                    pos1 = e1.get(Position)
-                    pos2 = e2.get(Position)
+        """Apply 2D elastic collisions between rocks and rocks or agents and rocks using spatial hash."""
+        # --- Build spatial hash ---
+        grid = {}
+        for e in entities:
+            pos = e.get(Position)
+            if not pos:
+                continue
+            cell_x = int(pos.x // self.cell_size)
+            cell_y = int(pos.y // self.cell_size)
+            key = (cell_x, cell_y)
+            if key not in grid:
+                grid[key] = []
+            grid[key].append(e)
+
+        # --- Check collisions only within same and neighboring cells ---
+        checked = set()
+        for cell, cell_entities in grid.items():
+            neighbor_keys = [
+                (cell[0]+dx, cell[1]+dy)
+                for dx in (-1, 0, 1)
+                for dy in (-1, 0, 1)
+            ]
+            for nk in neighbor_keys:
+                if nk not in grid:
+                    continue
+                for e1 in cell_entities:
+                    for e2 in grid[nk]:
+                        if e1.id == e2.id:
+                            continue  # skip self
+                        # create a unique pair identifier
+                        pair = tuple(sorted((e1.id, e2.id)))
+                        if pair in checked:
+                            continue  # already checked this pair
+                        checked.add(pair)  # mark as checked
+                        self._collide(e1, e2)
 
 
-                    if all([m1, m2, v1, v2, r1, r2, pos1, pos2]):
+    def _collide(self,e1,e2):
+        m1 = e1.get(Mass)
+        m2 = e2.get(Mass)
+        v1 = e1.get(Velocity)
+        v2 = e2.get(Velocity)
+        r1 = e1.get(Radius)
+        r2 = e2.get(Radius)
+        pos1 = e1.get(Position)
+        pos2 = e2.get(Position)
 
-                        m1 = m1.mass * mass_unit_factor
-                        m2 = m2.mass * mass_unit_factor
-                        r1 = r1.radius
-                        r2 = r2.radius
 
-                        d,(dx,dy),(unx,uny) = calc_distance(e1,e2)
-                        utx,uty = -uny,unx
+        if all([m1, m2, v1, v2, r1, r2, pos1, pos2]):
 
-                        d_min = r2+r1
-                        if d <= d_min:
-                            # clamp positions by mass
-                            total_mass = m1 + m2
-                            overlap = d_min-d
-                            pos1.x -= unx * overlap * (m2 / total_mass)
-                            pos1.y -= uny * overlap * (m2 / total_mass)
-                            pos2.x += unx * overlap * (m1 / total_mass)
-                            pos2.y += uny * overlap * (m1 / total_mass)
+            m1 = m1.mass * mass_unit_factor
+            m2 = m2.mass * mass_unit_factor
+            r1 = r1.radius
+            r2 = r2.radius
 
-                            # Elastic collision
-                            v_rel = (v1.x - v2.x)*unx + (v1.y - v2.y)*uny
-                            impulse = ((self.restitution+1) * v_rel) / (1/m1 + 1/m2)
+            d,(dx,dy),(unx,uny) = calc_distance(e1,e2)
+            utx,uty = -uny,unx
 
-                            v1.x -= (impulse / m1) * unx
-                            v1.y -= (impulse / m1) * uny
-                            v2.x += (impulse / m2) * unx
-                            v2.y += (impulse / m2) * uny
+            d_min = r2+r1
+            if d <= d_min:
+                # clamp positions by mass
+                total_mass = m1 + m2
+                overlap = d_min-d
+                pos1.x -= unx * overlap * (m2 / total_mass)
+                pos1.y -= uny * overlap * (m2 / total_mass)
+                pos2.x += unx * overlap * (m1 / total_mass)
+                pos2.y += uny * overlap * (m1 / total_mass)
 
-                            # Some friction
-                            v1_tangent = v1.x*utx + v1.y*uty
-                            v2_tangent = v2.x*utx + v2.y*uty
-                            v1.x -= v1_tangent*utx*self.friction_coeff
-                            v1.y -= v1_tangent*uty*self.friction_coeff
-                            v2.x -= v2_tangent*utx*self.friction_coeff
-                            v2.y -= v2_tangent*uty*self.friction_coeff
+                # Elastic collision
+                v_rel = (v1.x - v2.x)*unx + (v1.y - v2.y)*uny
+                impulse = ((self.restitution+1) * v_rel) / (1/m1 + 1/m2)
 
-                            # print(f"{time.time()}: Collision between {e1.id} and {e2.id} with overlap {overlap:4.2f} | New v1 ({v1.x:4.2f},{v1.y:4.2f}) and v2 ({v2.x:4.2f},{v2.y:4.2f}) | \nNew distance {calc_distance(e1,e2)[0]:4.2f}")
+                v1.x -= (impulse / m1) * unx
+                v1.y -= (impulse / m1) * uny
+                v2.x += (impulse / m2) * unx
+                v2.y += (impulse / m2) * uny
+
+                # Some friction
+                v1_tangent = v1.x*utx + v1.y*uty
+                v2_tangent = v2.x*utx + v2.y*uty
+                v1.x -= v1_tangent*utx*self.friction_coeff
+                v1.y -= v1_tangent*uty*self.friction_coeff
+                v2.x -= v2_tangent*utx*self.friction_coeff
+                v2.y -= v2_tangent*uty*self.friction_coeff
+
+                # print(f"{time.time()}: Collision between {e1.id} and {e2.id} with overlap {overlap:4.2f} | New v1 ({v1.x:4.2f},{v1.y:4.2f}) and v2 ({v2.x:4.2f},{v2.y:4.2f}) | \nNew distance {calc_distance(e1,e2)[0]:4.2f}")
                                 
 
 
