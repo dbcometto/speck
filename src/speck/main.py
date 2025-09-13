@@ -35,10 +35,10 @@ if __name__ == "__main__":
 
     # World Creation and Spinning
 
-    world = World(entitylist=entity_list,hz=60,render_hz=60)
+    # world = World(entitylist=entity_list,hz=60,render_hz=60)
 
-    # world = World()
-    # world.generate()
+    world = World(hz=60,render_hz=60,timewarp=1)
+    world.generate()
 
     # world = World(worldpath="worlds/physics_test_world.json",timewarp=1,hz=60)
     # world.load()

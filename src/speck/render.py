@@ -2,17 +2,180 @@
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch
-
+import pyglet
+import math
 
 from .components import Position, Velocity, Acceleration, Forces
 from .components import Radius, Mass
 from .components import Thruster
 from .components import Behavior_Orbiter
 from .components import RenderData
-
 from .entities import Entity
 
-class Renderer():
+
+
+
+def make_line(x1, y1, x2, y2, thickness=2, color=(255,255,255), batch=None):
+    dx = x2 - x1
+    dy = y2 - y1
+    length = math.hypot(dx, dy)
+    angle = math.degrees(math.atan2(dy, dx))
+    rect = pyglet.shapes.Rectangle(
+        x=x1, y=y1,
+        width=length,
+        height=thickness,
+        color=color,
+        batch=batch
+    )
+    rect.rotation = angle
+    return rect
+
+
+
+# Render with pyglet
+class RendererPyglet():
+    def __init__(self, width=1000, height=600):
+        self.width = width
+        self.height = height
+
+        # Create window
+        self.window = pyglet.window.Window(width=width, height=height, caption="Simulation")
+        self.batch = pyglet.graphics.Batch()
+        self.shapes = []
+
+        pyglet.gl.glClearColor(0.035, 0.035, 0.035, 1.0)  # Dark gray
+
+        # Camera offset
+        self.camera_x = 0
+        self.camera_y = 0
+        self.is_dragging = False
+        self.drag_start_x = 0
+        self.drag_start_y = 0
+
+        self.zoom = 1.0
+        self.zoom_factor = 1.1  # TODO: make config changeable
+        self.zoom_bias = 0.15
+
+        # Hook the draw event
+        self.window.push_handlers(self)
+
+    # ----- Input handlers -----
+    def on_mouse_press(self, x, y, button, modifiers):
+        if button == pyglet.window.mouse.LEFT:
+            self.is_dragging = True
+            self.drag_start_x = x
+            self.drag_start_y = y
+
+    def on_mouse_release(self, x, y, button, modifiers):
+        if button == pyglet.window.mouse.LEFT:
+            self.is_dragging = False
+
+    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers):
+        if self.is_dragging:
+            # Move camera opposite to mouse movement
+            self.camera_x -= dx/self.zoom
+            self.camera_y -= dy/self.zoom
+
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
+        old_zoom = self.zoom
+        if scroll_y > 0:
+            self.zoom *= self.zoom_factor   # zoom in
+        else:
+            self.zoom /= self.zoom_factor   # zoom out
+
+        #
+        world_x = (x - self.width/2) / old_zoom + self.camera_x
+        world_y = (y - self.height/2) / old_zoom + self.camera_y
+        dx = (world_x - self.camera_x) * self.zoom_bias
+        dy = (world_y - self.camera_y) * self.zoom_bias
+        self.camera_x += dx
+        self.camera_y += dy
+
+    # ----- Update/draw -----
+    def update(self, entities, entities_by_id):
+        self.shapes.clear()
+        self.batch = pyglet.graphics.Batch()
+
+        for e in entities:
+            pos = e.get(Position)
+            radius = e.get(Radius)
+            render = e.get(RenderData)
+            vel = e.get(Velocity)
+            thruster = e.get(Thruster)
+
+            if not pos or not render:
+                continue
+
+            # Apply camera offset
+            x = (pos.x - self.camera_x) * self.zoom + self.width/2
+            y = (pos.y - self.camera_y) * self.zoom + self.height/2
+            r = radius.radius * self.zoom
+
+            # Circle
+            if render.shape == "circle" and radius:
+                circle = pyglet.shapes.Circle(
+                    x=x, y=y, radius=r,
+                    color=(102, 102, 102),
+                    batch=self.batch
+                )
+                self.shapes.append(circle)
+
+            # Rectangle
+            elif render.shape == "rectangle" and radius:
+                rect = pyglet.shapes.Rectangle(
+                    x=x - r/2,
+                    y=y - r/2,
+                    width=r,
+                    height=r,
+                    color=(78, 218, 194),
+                    batch=self.batch
+                )
+                self.shapes.append(rect)
+
+                # Velocity arrow
+                if vel:
+                    line = make_line(
+                        x, y,
+                        x + vel.x*0.6*self.zoom,
+                        y + vel.y*0.6*self.zoom,
+                        thickness=2,
+                        color=(56, 255, 116),
+                        batch=self.batch
+                    )
+                    self.shapes.append(line)
+
+                # Thruster arrow
+                if thruster:
+                    line = make_line(
+                        x, y,
+                        x - thruster.thrust_x*1.3*self.zoom,
+                        y - thruster.thrust_y*1.3*self.zoom,
+                        thickness=2,
+                        color=(255, 112, 56),
+                        batch=self.batch
+                    )
+                    self.shapes.append(line)
+
+        self.window.clear()
+        self.batch.draw()
+        self.window.flip()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Render with matplotlib
+class RendererMatplotlib():
     def __init__(self,resolution=(1000,600),dpi=100,zoom_bias=0.2):
         # Config
         # TODO: make this into a config file

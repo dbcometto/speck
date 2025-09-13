@@ -9,11 +9,11 @@ from .components import Position, Velocity, Acceleration, Radius, Forces, Thrust
 from .components import Behavior_Orbiter
 from .systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup
 from .factories import create_rock, create_agent
-from .render import Renderer
+from .render import RendererMatplotlib, RendererPyglet
 
 
 class World:
-    def __init__(self,worldpath="worlds/world.json",entitylist=None,hz=30,render_hz=2,timewarp=1,worldsize=200):
+    def __init__(self,worldpath="worlds/world.json",entitylist=None,hz=30,render_hz=2,timewarp=1,worldsize=200,renderer="pyglet"):
         
         self.worldpath = worldpath
         self.hz = hz
@@ -33,9 +33,13 @@ class World:
             FunctionalityGroup(),
             DynamicsGroup(dt=self.dt,timewarp=self.timewarp),
         ]
-        self.renderer = Renderer()
+        
+        if renderer == "pyglet":
+            self.renderer = RendererPyglet()
+        else:
+            self.renderer = RendererMatplotlib()
 
-        self.nextid = 0
+        self.nextid = 0 # TODO: make this match input
 
 
     def spin(self,debugging=False):
@@ -54,6 +58,11 @@ class World:
 
                     self.past_time = current_time
                     self.update(doRender)
+
+                    try:
+                        self.renderer.window.dispatch_events()
+                    except:
+                        print("Not using pyglet!")
 
                     t1 = time.perf_counter()
                     print(f"{doRender} {t1-t0:8.4f}")
