@@ -12,17 +12,19 @@ from .components import RenderData
 
 from .entities import Entity
 
-
-class RenderGroup():
-    def __init__(self,size=200):
+class Renderer():
+    def __init__(self,resolution=(1000,600),dpi=100,zoom_bias=0.2):
         # Config
         # TODO: make this into a config file
-        self.resolution = (1000,600)
-        self.dpi = 100
+        self.resolution = resolution
+        self.dpi = dpi
         self.figure_size = (self.resolution[0] / self.dpi, self.resolution[1] / self.dpi)
 
         self.aspect_ratio = self.resolution[0]/self.resolution[1]
-        self.zoom_bias = 0.2
+        self.zoom_bias = zoom_bias
+
+
+
 
         # Set up plotting values
         plt.ion()
@@ -35,7 +37,6 @@ class RenderGroup():
         self.ax.set_aspect('equal', adjustable='box')
         self.ax.set_xticks([])
         self.ax.set_yticks([])
-        # self.ax.set_frame_on(False) # This was used at one point but shouldn't be necessary.  TODO: remove
 
 
         # Set limits
@@ -48,7 +49,7 @@ class RenderGroup():
 
 
         # Update systems
-        self.renderSystem = RenderSystem(self.fig,self.ax)
+        self.renderSystem = RenderSystemMatplotlib(self.fig,self.ax)
 
 
     def update(self, entities, entities_by_id):
@@ -94,7 +95,7 @@ class RenderGroup():
 
 
 
-class RenderSystem():
+class RenderSystemMatplotlib():
     def __init__(self,fig,ax):
         self.fig = fig
         self.ax = ax

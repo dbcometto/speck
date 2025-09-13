@@ -9,7 +9,7 @@ from .components import Position, Velocity, Acceleration, Radius, Forces, Thrust
 from .components import Behavior_Orbiter
 from .systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup
 from .factories import create_rock, create_agent
-from .render import RenderGroup
+from .render import Renderer
 
 
 class World:
@@ -33,7 +33,7 @@ class World:
             FunctionalityGroup(),
             DynamicsGroup(dt=self.dt,timewarp=self.timewarp),
         ]
-        self.renderer = RenderGroup(size=self.worldsize)
+        self.renderer = Renderer()
 
         self.nextid = 0
 
