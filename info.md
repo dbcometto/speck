@@ -9,7 +9,9 @@ Fix gravity unit test... not sure what's up with it.  Then finish testing the sy
 
 
 ## TODO
-- [ ] Make physics perform better for large numbers of entities
+- [ ] Radiation/Radio??
+- [ ] Gases/dusts??
+- [ ] Make physics perform even better for large numbers of entities, 800 works meh
 - [ ] Finish adding tests 
 
 
