@@ -13,7 +13,7 @@ from .render import RendererMatplotlib, RendererPyglet
 
 
 class World:
-    def __init__(self,worldpath="worlds/world.json",entitylist=None,hz=30,render_hz=2,timewarp=1,worldsize=200,renderer="pyglet"):
+    def __init__(self,worldpath="worlds/world.json",entitylist=None,hz=30,render_hz=2,timewarp=1,renderer="pyglet"):
         
         self.worldpath = worldpath
         self.hz = hz
@@ -21,7 +21,6 @@ class World:
         self.dt = 1/hz
         self.render_period = 1/render_hz
         self.timewarp = timewarp
-        self.worldsize = worldsize
         self.past_time = 0
         self.past_render_time = 0
         
@@ -48,7 +47,7 @@ class World:
                 current_time = time.time()
 
                 if (current_time-self.past_time > self.dt):
-                    t0 = time.perf_counter()
+                    # t0 = time.perf_counter()
 
                     if (current_time-self.past_render_time > self.render_period):
                         self.past_render_time = current_time
@@ -64,8 +63,8 @@ class World:
                     except:
                         print("Not using pyglet!")
 
-                    t1 = time.perf_counter()
-                    print(f"{doRender} {t1-t0:8.4f}")
+                    # t1 = time.perf_counter()
+                    # print(f"{doRender} {t1-t0:8.4f}")
 
 
         except KeyboardInterrupt:
@@ -91,6 +90,8 @@ class World:
             # t1 = time.perf_counter()
             # print(f"{type(self.renderer)}: {t1-t0:8.4f}")
             
+
+
 
     def save(self):
         entity_list_dicts = [e.to_dict() for e in self.entities]

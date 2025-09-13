@@ -19,7 +19,7 @@ def make_line(x1, y1, x2, y2, thickness=2, color=(255,255,255), batch=None):
     dx = x2 - x1
     dy = y2 - y1
     length = math.hypot(dx, dy)
-    angle = math.degrees(math.atan2(dy, dx))
+    angle = math.degrees(math.atan2(-dy, dx))
     rect = pyglet.shapes.Rectangle(
         x=x1, y=y1,
         width=length,
@@ -27,6 +27,8 @@ def make_line(x1, y1, x2, y2, thickness=2, color=(255,255,255), batch=None):
         color=color,
         batch=batch
     )
+    rect.anchor_x = 0           # rotate around left edge
+    rect.anchor_y = thickness/2 # vertically center the rectangle
     rect.rotation = angle
     return rect
 
@@ -40,7 +42,6 @@ class RendererPyglet():
 
         # Create window
         self.window = pyglet.window.Window(width=width, height=height, caption="Simulation")
-        self.batch = pyglet.graphics.Batch()
         self.shapes = []
 
         pyglet.gl.glClearColor(0.035, 0.035, 0.035, 1.0)  # Dark gray
@@ -91,10 +92,20 @@ class RendererPyglet():
         self.camera_x += dx
         self.camera_y += dy
 
+
+
+
     # ----- Update/draw -----
     def update(self, entities, entities_by_id):
         self.shapes.clear()
         self.batch = pyglet.graphics.Batch()
+
+        half_width  = self.width / (2 * self.zoom)
+        half_height = self.height / (2 * self.zoom)
+        left   = self.camera_x - half_width
+        right  = self.camera_x + half_width
+        bottom = self.camera_y - half_height
+        top    = self.camera_y + half_height
 
         for e in entities:
             pos = e.get(Position)
@@ -106,55 +117,78 @@ class RendererPyglet():
             if not pos or not render:
                 continue
 
-            # Apply camera offset
-            x = (pos.x - self.camera_x) * self.zoom + self.width/2
-            y = (pos.y - self.camera_y) * self.zoom + self.height/2
+            # --- Determine bounding box in world coordinates ---
+            if render.shape == "circle" and radius:
+                r_world = radius.radius
+                left_bb   = pos.x - r_world
+                right_bb  = pos.x + r_world
+                bottom_bb = pos.y - r_world
+                top_bb    = pos.y + r_world
+
+            elif render.shape == "rectangle" and radius:
+                half = radius.radius / 2
+                left_bb   = pos.x - half
+                right_bb  = pos.x + half
+                bottom_bb = pos.y - half
+                top_bb    = pos.y + half
+            else:
+                continue  # skip unknown shapes
+
+
+
+            # --- Convert to screen coordinates and render ---
+            x = (pos.x - self.camera_x) * self.zoom + self.width / 2
+            y = (pos.y - self.camera_y) * self.zoom + self.height / 2
             r = radius.radius * self.zoom
 
-            # Circle
-            if render.shape == "circle" and radius:
-                circle = pyglet.shapes.Circle(
-                    x=x, y=y, radius=r,
-                    color=(102, 102, 102),
-                    batch=self.batch
-                )
-                self.shapes.append(circle)
+            if render.shape == "circle":
+                if not any([right_bb < left, left_bb > right, top_bb < bottom, bottom_bb > top]):
+                    circle = pyglet.shapes.Circle(
+                        x=x, y=y, radius=r,
+                        color=(102, 102, 102),
+                        batch=self.batch
+                    )
+                    self.shapes.append(circle)
 
-            # Rectangle
-            elif render.shape == "rectangle" and radius:
-                rect = pyglet.shapes.Rectangle(
-                    x=x - r/2,
-                    y=y - r/2,
-                    width=r,
-                    height=r,
-                    color=(78, 218, 194),
-                    batch=self.batch
-                )
-                self.shapes.append(rect)
+            elif render.shape == "rectangle":
+                if not any([right_bb < left, left_bb > right, top_bb < bottom, bottom_bb > top]):
+                    rect = pyglet.shapes.Rectangle(
+                        x=x - r/2,
+                        y=y - r/2,
+                        width=r,
+                        height=r,
+                        color=(78, 218, 194),
+                        batch=self.batch
+                    )
+                    self.shapes.append(rect)
 
-                # Velocity arrow
+                # --- Velocity arrow ---
                 if vel:
-                    line = make_line(
-                        x, y,
-                        x + vel.x*0.6*self.zoom,
-                        y + vel.y*0.6*self.zoom,
-                        thickness=2,
-                        color=(56, 255, 116),
-                        batch=self.batch
-                    )
-                    self.shapes.append(line)
+                    x2 = (pos.x + vel.x*0.6 - self.camera_x) * self.zoom + self.width / 2
+                    y2 = (pos.y + vel.y*0.6 - self.camera_y) * self.zoom + self.height / 2
+                    # Cull arrow if completely off-screen
+                    if not ( (x < 0 and x2 < 0) or (x > self.width and x2 > self.width) or (y < 0 and y2 < 0) or (y > self.height and y2 > self.height) ):
+                        line = make_line(
+                            x, y, x2, y2,
+                            thickness=2,
+                            color=(56, 255, 116),
+                            batch=self.batch
+                        )
+                        self.shapes.append(line)
 
-                # Thruster arrow
+                # --- Thruster arrow ---
                 if thruster:
-                    line = make_line(
-                        x, y,
-                        x - thruster.thrust_x*1.3*self.zoom,
-                        y - thruster.thrust_y*1.3*self.zoom,
-                        thickness=2,
-                        color=(255, 112, 56),
-                        batch=self.batch
-                    )
-                    self.shapes.append(line)
+                    x2 = (pos.x - thruster.thrust_x*0.6 - self.camera_x) * self.zoom + self.width / 2
+                    y2 = (pos.y - thruster.thrust_y*0.6 - self.camera_y) * self.zoom + self.height / 2
+                    # Cull arrow if completely off-screen
+                    if not ( (x < 0 and x2 < 0) or (x > self.width and x2 > self.width) or (y < 0 and y2 < 0) or (y > self.height and y2 > self.height) ):
+                        line = make_line(
+                            x, y, x2, y2,
+                            thickness=2,
+                            color=(255, 112, 56),
+                            batch=self.batch
+                        )
+                        self.shapes.append(line)
 
         self.window.clear()
         self.batch.draw()
