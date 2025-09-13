@@ -7,13 +7,13 @@ import math
 from .entities import Entity
 from .components import Position, Velocity, Acceleration, Radius, Forces, Thruster
 from .components import Behavior_Orbiter
-from .systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup, RenderGroup 
+from .systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup
 from .factories import create_rock, create_agent
-
+from .render import RendererMatplotlib, RendererPyglet
 
 
 class World:
-    def __init__(self,worldpath="worlds/world.json",entitylist=None,hz=30,render_hz=2,timewarp=1,worldsize=200):
+    def __init__(self,worldpath="worlds/world.json",entitylist=None,hz=30,render_hz=2,timewarp=1,renderer="pyglet"):
         
         self.worldpath = worldpath
         self.hz = hz
@@ -21,7 +21,6 @@ class World:
         self.dt = 1/hz
         self.render_period = 1/render_hz
         self.timewarp = timewarp
-        self.worldsize = worldsize
         self.past_time = 0
         self.past_render_time = 0
         
@@ -33,9 +32,13 @@ class World:
             FunctionalityGroup(),
             DynamicsGroup(dt=self.dt,timewarp=self.timewarp),
         ]
-        self.renderer = RenderGroup(size=self.worldsize)
+        
+        if renderer == "pyglet":
+            self.renderer = RendererPyglet()
+        else:
+            self.renderer = RendererMatplotlib()
 
-        self.nextid = 0
+        self.nextid = 0 # TODO: make this match input
 
 
     def spin(self,debugging=False):
@@ -44,7 +47,7 @@ class World:
                 current_time = time.time()
 
                 if (current_time-self.past_time > self.dt):
-                    t0 = time.perf_counter()
+                    # t0 = time.perf_counter()
 
                     if (current_time-self.past_render_time > self.render_period):
                         self.past_render_time = current_time
@@ -55,8 +58,13 @@ class World:
                     self.past_time = current_time
                     self.update(doRender)
 
-                    t1 = time.perf_counter()
-                    print(f"{doRender} {t1-t0:8.4f}")
+                    try:
+                        self.renderer.window.dispatch_events()
+                    except:
+                        print("Not using pyglet!")
+
+                    # t1 = time.perf_counter()
+                    # print(f"{doRender} {t1-t0:8.4f}")
 
 
         except KeyboardInterrupt:
@@ -82,6 +90,8 @@ class World:
             # t1 = time.perf_counter()
             # print(f"{type(self.renderer)}: {t1-t0:8.4f}")
             
+
+
 
     def save(self):
         entity_list_dicts = [e.to_dict() for e in self.entities]
