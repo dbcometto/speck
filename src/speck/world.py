@@ -4,10 +4,11 @@ import json
 import random
 import math
 
-from entities import Entity
-from components import Position, Velocity, Acceleration, Radius, Forces, Thruster
-from components import Behavior_Orbiter
-from systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup, RenderGroup 
+from .entities import Entity
+from .components import Position, Velocity, Acceleration, Radius, Forces, Thruster
+from .components import Behavior_Orbiter
+from .systems import BehaviorGroup, FunctionalityGroup, DynamicsGroup, RenderGroup 
+from .factories import create_rock, create_agent
 
 
 
@@ -135,7 +136,7 @@ class World:
             velx = random.uniform(-max_vel,max_vel)
             vely = random.uniform(-max_vel,max_vel)
 
-            self.add_entity(Rock(entity_id=self.nextid,position=(posx,posy),velocity=(velx,vely),radius=radius,mass=mass))
+            self.add_entity(create_rock(entity_id=self.nextid,position=(posx,posy),velocity=(velx,vely),radius=radius,mass=mass))
 
 
 

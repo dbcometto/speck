@@ -1,10 +1,10 @@
 # Here we define all of the entities
 
-from components import component_types
-from components import Position, Velocity, Acceleration, Forces
-from components import Radius, Mass, Width
-from components import Thruster, Behavior_Orbiter
-from components import RenderData
+from .components import component_types
+from .components import Position, Velocity, Acceleration, Forces
+from .components import Radius, Mass
+from .components import Thruster, Behavior_Orbiter
+from .components import RenderData
 
 # Next, create entities
 class Entity:
@@ -15,8 +15,8 @@ class Entity:
     def add_component(self, component):
         self.components[type(component)] = component
 
-    def remove_component(self,component):
-        self.components.pop(type(component), None)
+    def remove_component(self,component_class):
+        self.components.pop(component_class, None)
 
     def get(self, component_type):
         return self.components.get(component_type)
@@ -31,7 +31,6 @@ class Entity:
             # Store the component type as a string and use its own to_dict method
             comp_dict[comp_type.__name__] = comp.__dict__
         return {
-                "class": type(self).__name__,
                 "id": self.id, 
                 "components": comp_dict
                 }
@@ -42,8 +41,7 @@ class Entity:
         Reconstruct entity from dict.
         component_classes: dict mapping component type name (str) -> class
         """
-        entity_cls = entity_types[data["class"]]
-        entity = entity_cls(data["id"])
+        entity = cls(data["id"])
         for comp_name, comp_attrs in data["components"].items():
             # Use globals() to find the component class
             comp_cls = component_types[comp_name]  # assumes the class exists in the current module

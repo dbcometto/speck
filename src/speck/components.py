@@ -35,10 +35,6 @@ class Mass:
     def __init__(self,mass):
         self.mass = mass                    # in t = Mg = 1000 kg
 
-class Width:
-    def __init__(self,width):
-        self.width = width                    # in km
-
 
 
 # More things
@@ -53,12 +49,7 @@ class Thruster:
         self.throttle = throttle
 
 
-# AI Attributes
-
-class Behavior_RandomThruster:
-    def __init__(self):
-        pass
-
+# Behavior Attributes
 
 class Behavior_Orbiter:
     def __init__(self,orbit_id,orbit_distance):
@@ -82,9 +73,7 @@ component_types = {
     "Forces"                    : Forces,
     "Radius"                    : Radius,
     "Mass"                      : Mass,
-    "Width"                     : Width,
     "Thruster"                  : Thruster,
-    "Behavior_RandomThruster"   : Behavior_RandomThruster,
     "Behavior_Orbiter"          : Behavior_Orbiter,
     "RenderData"                : RenderData,
 }

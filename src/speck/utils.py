@@ -2,11 +2,11 @@
 import math
 from typing import Tuple
 
-from entities import Entity
+from .entities import Entity
 
-from components import Position, Velocity, Acceleration, Forces
-from components import Radius, Mass, Width
-from components import Thruster
+from .components import Position, Velocity, Acceleration, Forces
+from .components import Radius, Mass
+from .components import Thruster
 
 
 Distance = float
