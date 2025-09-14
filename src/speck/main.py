@@ -1,6 +1,7 @@
 # This is the beginning
 import time
 import math
+import random
 
 # Fix ctrl-c issues with matplotlib
 import signal, sys
@@ -8,7 +9,7 @@ signal.signal(signal.SIGINT, lambda sig, frame: sys.exit(0))
 
 from .entities import Entity
 from .world import World
-from .components import Behavior_Orbiter
+from .components import Behavior_Orbiter, RenderData
 from .config import G
 
 from .factories import create_rock, create_agent
@@ -26,19 +27,36 @@ if __name__ == "__main__":
     entity_list = [
         create_rock(1,position=(0,0),velocity=(0,0),mass=9e17,radius=473), 
         create_rock(2,position=(0,-1000),velocity=(math.sqrt(G*9e17/1000),0),mass=1e8,radius=20),
-        create_rock(2,position=(0,600),velocity=(0,0),mass=1e4,radius=10),
+        create_rock(5,position=(0,600),velocity=(0,0),mass=1e4,radius=10),
         fred,
         bob,
         ]
 
+    # Add dust
+    num_particles = 800
+    ring_radius = 500
+    fudge = 20
 
+    for i in range(num_particles):
+        r = create_rock(
+                6+i,
+                position=(
+                    ring_radius * math.cos(2 * math.pi * i / num_particles) + fudge*random.uniform(-1,1),
+                    ring_radius * math.sin(2 * math.pi * i / num_particles) + fudge*random.uniform(-1,1)
+                ),
+                velocity=(0, 0),
+                mass=1e2,
+                radius=4
+            )
+        r.add_component(RenderData(color="#22FFFF"))
+        entity_list.append(r)
 
     # World Creation and Spinning
 
-    # world = World(entitylist=entity_list,hz=60,render_hz=60)
+    world = World(entitylist=entity_list,hz=60,render_hz=60,timewarp=10)
 
-    world = World(hz=60,render_hz=60,timewarp=1)
-    world.generate(boundary=5000,max_rocks=800)
+    # world = World(hz=60,render_hz=60,timewarp=1)
+    # world.generate(boundary=5000,max_rocks=800)
 
     # world = World(worldpath="worlds/physics_test_world.json",timewarp=1,hz=60)
     # world.load()

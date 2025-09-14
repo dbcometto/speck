@@ -145,7 +145,7 @@ class RendererPyglet():
                 if not any([right_bb < left, left_bb > right, top_bb < bottom, bottom_bb > top]):
                     circle = pyglet.shapes.Circle(
                         x=x, y=y, radius=r,
-                        color=(102, 102, 102),
+                        color=tuple(int(render.color[i:i+2], 16) for i in (1, 3, 5)),
                         batch=self.batch
                     )
                     self.shapes.append(circle)
@@ -157,7 +157,7 @@ class RendererPyglet():
                         y=y - r/2,
                         width=r,
                         height=r,
-                        color=(78, 218, 194),
+                        color=tuple(int(render.color[i:i+2], 16) for i in (1, 3, 5)),
                         batch=self.batch
                     )
                     self.shapes.append(rect)

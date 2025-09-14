@@ -114,7 +114,7 @@ class GravitySystem:
 
 
 class CollisionSystem:
-    def __init__(self,restitution=0.5,friction_coeff=0.7,cell_size=100):
+    def __init__(self,restitution=0.8,friction_coeff=0.1,cell_size=16):
         self.restitution = restitution
         self.friction_coeff = friction_coeff
         self.cell_size = cell_size
@@ -125,14 +125,29 @@ class CollisionSystem:
         grid = {}
         for e in entities:
             pos = e.get(Position)
-            if not pos:
-                continue
-            cell_x = int(pos.x // self.cell_size)
-            cell_y = int(pos.y // self.cell_size)
-            key = (cell_x, cell_y)
-            if key not in grid:
-                grid[key] = []
-            grid[key].append(e)
+            r   = e.get(Radius)
+
+            if pos and r:
+                min_cx = int((pos.x - r.radius) // self.cell_size)
+                max_cx = int((pos.x + r.radius) // self.cell_size)
+                min_cy = int((pos.y - r.radius) // self.cell_size)
+                max_cy = int((pos.y + r.radius) // self.cell_size)
+
+                # insert into every cell overlapped
+                for cx in range(min_cx, max_cx + 1):
+                    for cy in range(min_cy, max_cy + 1):
+                        key = (cx, cy)
+                        if key not in grid:
+                            grid[key] = []
+                        grid[key].append(e)
+
+            elif pos:
+                cell_x = int(pos.x // self.cell_size)
+                cell_y = int(pos.y // self.cell_size)
+                key = (cell_x, cell_y)
+                if key not in grid:
+                    grid[key] = []
+                grid[key].append(e)
 
         # --- Check collisions only within same and neighboring cells ---
         checked = set()
