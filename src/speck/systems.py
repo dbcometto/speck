@@ -2,6 +2,8 @@
 import math
 import time
 
+import numpy as np
+
 from .utils import calc_distance
 from .config import G, mass_unit_factor
 
