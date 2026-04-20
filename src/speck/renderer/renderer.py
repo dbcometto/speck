@@ -1,9 +1,15 @@
 """Render the world"""
 from abc import ABC, abstractmethod
+from enum import IntEnum
 
 from ..core import World
 from .camera import Camera
 from .hud import HUD
+
+# Rendering
+class RenderType(IntEnum):
+    POINT = 0
+    CIRCLE = 1
 
 class Renderer(ABC):
     """A base renderer"""

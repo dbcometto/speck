@@ -58,8 +58,16 @@ class HUD():
             wx, wy = self._cursor_world_pos()
             self._debug_label.text = (
                 f"t={self.world.time:.1f}s  "
+                f"twarp={self.world.timewarp:.1f}x  "
+                f"sub_dt={self.world.last_sub_dt:.1f}s  "
+                f"sub_steps={self.world.last_sub_steps:<4d}  "
                 f"ups={self._ups:.0f}  "
                 f"fps={self._fps:.0f}  "
                 f"cursor=({wx:.1f}, {wy:.1f})"
             )
         self._batch.draw()
+
+    def on_resize(self, width, height):
+        self.width = width
+        self.height = height
+        self._debug_label.y = height - 20

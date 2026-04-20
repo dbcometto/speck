@@ -2,9 +2,11 @@
 import pyglet
 import time
 
-from ..renderer import Renderer, Camera, HUD
+from ..renderer import RenderType, Renderer, Camera, HUD
 from ..core import World
 from ..components.dynamics import Position
+from ..components.rendering import RenderData
+from ..config import POINT_ICON_RADIUS, MIN_BODY_SCREEN_RADIUS
 
 class PygletRenderer2D(Renderer):
     """A 2D renderer using Pyglet"""
@@ -14,7 +16,7 @@ class PygletRenderer2D(Renderer):
         self._last_draw = time.perf_counter()     
 
         # Pyglet State
-        self.window = pyglet.window.Window(width=self.width, height=self.height, caption="Speck")
+        self.window = pyglet.window.Window(width=self.width, height=self.height, caption="Speck", resizable = True)
         pyglet.gl.glClearColor(0.05, 0.05, 0.05, 1.0)
         self.window.push_handlers(self)
         self.window.push_handlers(hud)
@@ -37,17 +39,32 @@ class PygletRenderer2D(Renderer):
         shapes = []
 
         positions = self.world.get_component(Position)
-        # particles = self.world.get(RenderParticle)
+        renderdatas = self.world.get_component(RenderData)
 
-        for eid, pos in positions.items():
+        for eid in positions.keys() & renderdatas.keys():
+            pos = positions[eid]
             sx, sy = self.world_to_screen(pos.x, pos.y)
 
-            # frustum cull
-            if sx < 0 or sx > self.width or sy < 0 or sy > self.height:
-                continue
+            data = renderdatas[eid]
 
-            color = (255, 255, 255) # particles[eid].color if eid in particles else (255, 255, 255)
-            shapes.append(pyglet.shapes.Circle(x=sx, y=sy, radius=3, color=color, batch=batch))
+            if data.render_type == RenderType.POINT:
+                if sx < 0 or sx > self.width or sy < 0 or sy > self.height:
+                    continue
+
+                shapes.append(pyglet.shapes.Circle(x=sx, y=sy, radius=POINT_ICON_RADIUS, color=data.color, batch=batch))
+
+            elif data.render_type == RenderType.CIRCLE:
+                radius = max(data.radius*self.camera.zoom,MIN_BODY_SCREEN_RADIUS)
+
+                if sx + radius < 0 or sx - radius > self.width or sy + radius < 0 or sy - radius > self.height:
+                    continue
+
+                shapes.append(pyglet.shapes.Circle(x=sx, y=sy, radius=radius, color=data.color, batch=batch))
 
         batch.draw()
         self.hud.draw()
+
+
+    def on_resize(self, width, height):
+        self.width = width
+        self.height = height

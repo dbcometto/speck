@@ -1,0 +1,1 @@
+"""Speck package: implements the Speck Space Ecosystem"""

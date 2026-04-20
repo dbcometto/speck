@@ -7,10 +7,12 @@ if TYPE_CHECKING:
     from ..components import Component
     from ..systems import System
 
+from ..config import MAX_SUBSTEP_DELTA_T, MAX_SUBSTEPS
+
 class World():
     """A world that holds data"""
 
-    def __init__(self) -> None:
+    def __init__(self, timewarp = 1.0) -> None:
         """Initialize an empty world"""
         self._next_eid = 0
         self.components = {}  
@@ -18,6 +20,12 @@ class World():
 
         # World state
         self.time = 0
+        self.timewarp = timewarp
+
+        # Debudding state
+        self.last_sim_dt = -1.0
+        self.last_sub_steps = -1
+        self.last_sub_dt = -1.0
 
 
     # Entity Helpers
@@ -56,9 +64,19 @@ class World():
         self.systems.append(system)
 
     def update(self, dt: float):
-        self.time += dt
-        for system in self.systems:
-            system.update(self,dt)
+        sim_dt = dt*self.timewarp
+        self.time += sim_dt
+
+        steps = min(max(1, int(sim_dt / MAX_SUBSTEP_DELTA_T)), MAX_SUBSTEPS)
+        sub_dt = sim_dt/steps
+        for _ in range(steps):
+            for system in self.systems:
+                system.update(self,sub_dt)
+
+        # Debugging logging
+        self.last_sim_dt = sim_dt
+        self.last_sub_steps = steps
+        self.last_sub_dt = sub_dt
     
 
     # TODO: save and load
