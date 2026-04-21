@@ -1,8 +1,7 @@
 """Factories to easily create entities"""
-from speck.core import World
-from speck.components.dynamics import Position, Velocity, Acceleration, Mass, GravityConsumer, GravitySource
-from speck.components.rendering import RenderData
-from speck.renderer import RenderType
+from ..core import World
+from ..components.dynamics import Position, Velocity, Acceleration, Mass, GravityConsumer, GravitySource
+from ..components.rendering import RenderData, RenderType
 
 def generate_moveable_agent(world: World,
                             x = 0, y = 0, z = 0,
