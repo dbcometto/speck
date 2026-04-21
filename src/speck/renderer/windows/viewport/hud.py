@@ -1,18 +1,20 @@
 """Owns the HUD"""
 import pyglet
 
-from ..core.world import World
+from ....core.world import World
 from .camera import Camera
-from ..config import SELECTED_COLOR, OTHER_COLOR, KEYBINDS
+from .input_handler import InputHandler
+from ....config import SELECTED_COLOR, OTHER_COLOR, KEYBINDS
 
 class HUD():
     """The HUD"""
-    def __init__(self, world: World, camera: Camera, width: int = 800, height: int = 600) -> None:
+    def __init__(self, world: World, camera: Camera, input_handler: InputHandler, width: int = 800, height: int = 600) -> None:
         """Init the HUD"""
         self.world = world
         self.camera = camera
         self.width = width
         self.height = height
+        self.input_handler = input_handler
 
         self.show_debug = True
         self.show_scale = True
@@ -97,6 +99,9 @@ class HUD():
                 f"ups={self._ups:.0f}  "
                 f"fps={self._fps:.0f}  "
                 f"cursor=({self.cursor_world_x:.1f}, {self.cursor_world_y:.1f})"
+                f"select={self.input_handler.selected_eid}"
+                f"hover={self.input_handler.hover_eid}"
+                f"follow={self.input_handler.follow_eid}"
             )
         else:
             self._debug_label.text = ""

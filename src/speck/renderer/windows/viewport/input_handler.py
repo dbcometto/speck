@@ -2,10 +2,10 @@
 import pyglet
 import math
 
-from ..core import World
-from ..components.dynamics import Position
+from ....core import World
+from ....components.dynamics import Position
 from .camera import Camera
-from ..config import SELECTION_TOLERANCE, KEYBINDS
+from ....config import SELECTION_TOLERANCE, KEYBINDS
 
 class InputHandler():
     """An input handler"""

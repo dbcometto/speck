@@ -5,9 +5,6 @@ from typing import Self
 import pyglet
 
 from ...core import World
-from ..camera import Camera
-from ..hud import HUD
-from ..input_handler import InputHandler
 
 # Rendering
 class SpeckWindow(ABC):
@@ -22,10 +19,6 @@ class SpeckWindow(ABC):
 
         self.width = width
         self.height = height
-
-        self.camera = Camera(width, height)
-        self.hud = HUD(world, self.camera, width, height)
-        self.input_handler = InputHandler(world, self.camera)
     
 
     @abstractmethod

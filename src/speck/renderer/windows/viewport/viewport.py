@@ -3,19 +3,24 @@ import pyglet
 import time
 from enum import IntEnum
 
-from .. import Camera, HUD
-from ..windows import SpeckWindow
-from ...core import World
-from ...components.dynamics import Position
-from ...components.rendering import RenderData, RenderType
-from ...config import POINT_ICON_RADIUS, MIN_BODY_SCREEN_RADIUS, SELECT_SQUARE_PADDING
-from ...config import SELECTED_COLOR, OTHER_COLOR
+from .camera import Camera
+from .hud import HUD
+from .input_handler import InputHandler
+from ...windows import SpeckWindow
+from ....core import World
+from ....components.dynamics import Position
+from ....components.rendering import RenderData, RenderType
+from ....config import POINT_ICON_RADIUS, MIN_BODY_SCREEN_RADIUS, SELECT_SQUARE_PADDING
+from ....config import SELECTED_COLOR, OTHER_COLOR
 
 class ViewportWindow(SpeckWindow):
     """A 2D renderer using Pyglet"""
     def __init__(self, world: World, windows: list[SpeckWindow], width: int = 800, height: int = 600):
         """Establish the Pyglet renderer"""
         super().__init__(world, windows, width, height) # creates window, hud, camera, and input handler
+        self.camera = Camera(width, height)
+        self.input_handler = InputHandler(world, self.camera)
+        self.hud = HUD(world, self.camera, self.input_handler, width, height)
         self._last_draw = time.perf_counter()
         self.windows.append(self.window)     
 
