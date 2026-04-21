@@ -42,6 +42,16 @@ input_handler = InputHandler(camera)
 renderer.window.push_handlers(input_handler)
 
 
+# Set up rendering
+camera2 = Camera()
+hud2 = HUD(world, camera2)
+renderer2 = PygletRenderer2D(world, camera2, hud2)
+
+# Set up input
+input_handler2 = InputHandler(camera2)
+renderer2.window.push_handlers(input_handler2)
+
+
 
 
 
