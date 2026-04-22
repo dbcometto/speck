@@ -5,8 +5,11 @@ from typing import Callable
 from enum import Enum
 
 from ....core import World
+from ....components.dynamics import Position
+from ....components.rendering import RenderData
+from .camera import Camera
 from ....utils import _hex_to_rgb
-from ....config import SELECTED_COLOR, GRAY_COLOR, OTHER_COLOR
+from ....config import SELECTED_COLOR, GRAY_COLOR, OTHER_COLOR, DARK_GRAY_COLOR, ZOOM_FACTOR, MINIMAP_FOCUS_COLOR
 
 
 
@@ -45,6 +48,12 @@ class Widget(ABC):
         return False
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool:
+        return False
+    
+    def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int) -> bool:
+        return False
+    
+    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers) -> bool:
         return False
 
     def on_resize(self, width: int, height: int) -> None:
@@ -419,19 +428,23 @@ class SelectionPanelWidget(PanelWidget):
 
 class ActionBarWidget(PanelWidget):
     """Shows actions for the selected entity"""
-    def __init__(self, world: World, input_handler, parent_width: int = 800, parent_height: int = 600) -> None:
+    def __init__(self, world: World, input_handler, 
+                 on_minimap_follow: Callable,
+                 parent_width: int = 800, parent_height: int = 600) -> None:
         super().__init__(x=0, y=0, width=0, height=40,
                          layout="horizontal", gap=4, padding=4, alpha=0)
         self.world = world
         self.input_handler = input_handler
+        self.on_minimap_follow = on_minimap_follow
         self._built_for_eid: int | None = None
         self._parent_width = parent_width
         self._parent_height = parent_height
 
     def _default_actions(self, eid: int) -> list[tuple[str, Callable]]:
         return [
-            ("[F] Follow", lambda: self.input_handler.set_follower(eid)),
-            ("[I] Inspect", lambda: self.input_handler.open_inspector(eid)),
+            ("[f] Follow", lambda: self.input_handler.set_follower(eid)),
+            ("[i] Inspect", lambda: self.input_handler.open_inspector(eid)),
+            ("[m] Minimap", lambda: self.on_minimap_follow(eid)),
         ]
 
     def _build(self, eid: int) -> None:
@@ -491,3 +504,182 @@ class ActionBarWidget(PanelWidget):
         if self._built_for_eid is not None:
             self._build(self._built_for_eid)
         self._reposition()
+
+
+
+
+
+
+
+
+class MinimapWidget(Widget):
+    def __init__(self, world: World, x: int, y: int, width: int, height: int,
+                 main_camera: Camera,
+                 view_range: float = 1000.0,
+                 anchor_top: bool = False, anchor_right: bool = False,
+                 anchor_bottom: bool = False, anchor_left: bool = False):
+        super().__init__(x, y, width, height, anchor_top, anchor_right, anchor_bottom, anchor_left)
+        self.world = world
+        self.main_camera = main_camera
+        self._background: pyglet.shapes.Rectangle | None = None
+        self._shapes: list = []
+        self._padding = 10
+        self._pressed = False
+        self._is_dragging = False
+
+        self._follow_eid: int | None = None
+
+        # Minimap camera
+        self.camera = Camera(width, height)
+        self.camera.zoom = min(
+            (width - self._padding * 2) / (view_range * 2),
+            (height - self._padding * 2) / (view_range * 2)
+        )
+
+    def _world_to_minimap(self, wx, wy) -> tuple[float, float]:
+        """Convert world coords to minimap screen coords"""
+        sx = (wx - self.camera.x) * self.camera.zoom + self.x + self.width / 2
+        sy = (wy - self.camera.y) * self.camera.zoom + self.y + self.height / 2
+        return sx, sy
+
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y) -> bool:
+        if self.hit_test(x, y):
+            self.camera.zoom *= ZOOM_FACTOR if scroll_y > 0 else 1 / ZOOM_FACTOR
+            return True
+        return False
+
+    def draw(self, batch: pyglet.graphics.Batch) -> None:
+        # Update minimap camera position
+        if self._follow_eid is not None:
+            positions = self.world.get_component(Position)
+            if self._follow_eid in positions:
+                pos = positions[self._follow_eid]
+                self.camera.x = pos.x
+                self.camera.y = pos.y
+        else:
+            self.camera.x = 0.0
+            self.camera.y = 0.0
+
+        if self._background is None:
+            self._background = pyglet.shapes.Rectangle(
+                x=self.x, y=self.y,
+                width=self.width, height=self.height,
+                color=_hex_to_rgb(DARK_GRAY_COLOR),
+                batch=batch
+            )
+            self._background.opacity = 128
+        else:
+            self._background.opacity = 128
+            self._background.batch = batch
+
+        positions = self.world.get_component(Position)
+
+        if not positions:
+            return
+
+        self._shapes = []
+        for eid, pos in positions.items():
+            mx, my = self._world_to_minimap(pos.x, pos.y)
+            # cull outside minimap bounds
+            if mx < self.x or mx > self.x + self.width or my < self.y or my > self.y + self.height:
+                continue
+            color = MINIMAP_FOCUS_COLOR if eid == self._follow_eid else OTHER_COLOR
+            tuple_color = _hex_to_rgb(color)
+            self._shapes.append(pyglet.shapes.Circle(
+                x=mx, y=my, radius=2,
+                color=tuple_color,
+                batch=batch
+            ))
+
+
+
+        # Draw main camera viewport indicator
+        half_w = self.main_camera.width / 2 / self.main_camera.zoom
+        half_h = self.main_camera.height / 2 / self.main_camera.zoom
+
+        # corners of main viewport in world space
+        left   = self.main_camera.x - half_w
+        right  = self.main_camera.x + half_w
+        bottom = self.main_camera.y - half_h
+        top    = self.main_camera.y + half_h
+
+        # convert to minimap space
+        mx1, my1 = self._world_to_minimap(left, bottom)
+        mx2, my2 = self._world_to_minimap(right, top)
+
+        # clamp to minimap bounds
+        mx1 = max(mx1, self.x)
+        my1 = max(my1, self.y)
+        mx2 = min(mx2, self.x + self.width)
+        my2 = min(my2, self.y + self.height)
+
+        box_w = mx2 - mx1
+        box_h = my2 - my1
+
+        if box_w > 0 and box_h > 0:
+            self._shapes.append(pyglet.shapes.Box(
+                x=mx1, y=my1,
+                width=box_w,
+                height=box_h,
+                thickness=1,
+                color=_hex_to_rgb(SELECTED_COLOR),
+                batch=batch
+            ))
+
+
+
+
+    def _on_reposition(self) -> None:
+        self.camera.width = self.width
+        self.camera.height = self.height
+        if self._background:
+            self._background.x = self.x
+            self._background.y = self.y
+            self._background.width = self.width
+            self._background.height = self.height
+
+    def on_resize(self, width: int, height: int) -> None:
+        super().on_resize(width, height)
+
+    def on_mouse_press(self, x, y, button, modifiers) -> bool:
+        if self.hit_test(x, y) and button == pyglet.window.mouse.LEFT:
+            self._pressed = True
+            self._is_dragging = False
+
+            wx = (x - self.x - self.width / 2) / self.camera.zoom + self.camera.x
+            wy = (y - self.y - self.height / 2) / self.camera.zoom + self.camera.y
+            self.main_camera.x = wx
+            self.main_camera.y = wy
+            
+            return True
+        self._pressed = False
+        return False
+
+    def on_mouse_release(self, x, y, button, modifiers) -> bool:
+        if self.hit_test(x, y) and button == pyglet.window.mouse.LEFT:
+            if not self._is_dragging and self._pressed:
+                self._is_dragging = False
+            self._pressed = False
+        return False
+
+    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers) -> bool:
+        if self.hit_test(x, y) and buttons & pyglet.window.mouse.LEFT and self._pressed:
+            self._is_dragging = True
+            self.main_camera.x += dx / self.camera.zoom
+            self.main_camera.y += dy / self.camera.zoom
+            return True
+        return False
+
+
+
+
+
+
+
+
+
+
+
+
+
+

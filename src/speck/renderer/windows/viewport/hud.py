@@ -6,7 +6,7 @@ from .camera import Camera
 from .input_handler import InputHandler
 from ....config import SELECTED_COLOR, OTHER_COLOR, KEYBINDS
 from ....utils import _hex_to_rgb
-from .widget import Widget, TextWidget, TextButtonWidget, PanelWidget, SelectionPanelWidget, ActionBarWidget
+from .widget import Widget, TextWidget, TextButtonWidget, PanelWidget, SelectionPanelWidget, ActionBarWidget, MinimapWidget
 
 class HUD():
     """The HUD"""
@@ -92,12 +92,25 @@ class HUD():
         self._widgets.append(self._selection_panel)
 
         # Actions Panel
-        self._action_bar = ActionBarWidget(self.world, self.input_handler, width, height)
+        self._action_bar = ActionBarWidget(self.world, self.input_handler, self.set_minimap_follow, width, height)
         self._widgets.append(self._action_bar)
 
 
+        # Minimap
+        self._minimap = MinimapWidget(
+            world=self.world,
+            main_camera=self.camera,
+            x=width - 210, y=height - 210,
+            width=200, height=200,
+            anchor_top=True, anchor_right=True
+        )
+        self._widgets.append(self._minimap)
+        input_handler.set_minimap_follow(self.set_minimap_follow)
 
 
+
+    def set_minimap_follow(self, eid: int | None) -> None:
+        self._minimap._follow_eid = eid
 
     def update_ups(self, dt: float) -> None:
         self._ups = 1.0 / dt if dt > 0 else 0.0
@@ -138,8 +151,14 @@ class HUD():
         for w in self._widgets:
             w.on_mouse_motion(x, y, dx, dy)
 
-    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers) -> None:
+    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers) -> bool:
         self.cursor_world_x, self.cursor_world_y = self.camera.screen_to_world(x, y)
+
+        for w in self._widgets:
+            if w.hit_test(x, y): 
+                w.on_mouse_drag(x, y, dx, dy, buttons, modifiers)
+                return True
+        return False
 
     def on_resize(self, width, height) -> None:
         self.width = width
@@ -147,11 +166,20 @@ class HUD():
         for w in self._widgets:
             w.on_resize(width, height)
 
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y) -> bool:
+        for w in self._widgets:
+            if w.hit_test(x, y): 
+                w.on_mouse_scroll(x, y, scroll_x, scroll_y)
+                return True
+        return False
+
     def on_key_press(self, symbol, modifiers) -> bool:
         if symbol in KEYBINDS["toggle_debug_hud"]:
             self.show_debug = not self.show_debug
             return True
         return False
+    
+
 
 
 

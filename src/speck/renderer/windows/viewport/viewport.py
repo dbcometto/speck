@@ -11,7 +11,7 @@ from ....core import World
 from ....components.dynamics import Position
 from ....components.rendering import RenderData, RenderType
 from ....config import POINT_ICON_RADIUS, MIN_BODY_SCREEN_RADIUS, SELECT_SQUARE_PADDING
-from ....config import SELECTED_COLOR, OTHER_COLOR
+from ....config import SELECTED_COLOR, OTHER_COLOR, BACKGROUND_COLOR
 from ....utils import _hex_to_rgb
 
 class ViewportWindow(SpeckWindow):
@@ -22,11 +22,10 @@ class ViewportWindow(SpeckWindow):
         self.camera = Camera(width, height)
         self.input_handler = InputHandler(world, self.camera, self.windows)
         self.hud = HUD(world, self.camera, self.input_handler, width, height)
-        self._last_draw = time.perf_counter()
-        self.windows.append(self.window)     
+        self._last_draw = time.perf_counter() 
 
         # Pyglet State
-        pyglet.gl.glClearColor(0.05, 0.05, 0.05, 1.0)
+        pyglet.gl.glClearColor(*_hex_to_rgb(BACKGROUND_COLOR, return_as_floats=True))
         self.window.push_handlers(self)
         self.window.push_handlers(self.camera)
         self.window.push_handlers(self.input_handler)
@@ -117,10 +116,3 @@ class ViewportWindow(SpeckWindow):
 
                 self.camera.origin_x = pos.x
                 self.camera.origin_y = pos.y
-
-
-
-    def _hex_to_rgb(self, hex: str) -> tuple[int, int, int]:
-        "Convert hex string to RGB"
-        hex = hex.lstrip('#')
-        return tuple(int(hex[i:i+2], 16) for i in (0, 2, 4))
