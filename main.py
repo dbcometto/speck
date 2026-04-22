@@ -4,7 +4,7 @@ import pyglet
 from speck.core import World
 from speck.components.dynamics import Position, Velocity
 
-from speck.renderer import PygletRenderer2D, Camera, InputHandler, HUD
+from speck.renderer.windows import ViewportWindow, InspectorWindow
 from speck.systems.dynamics import ResetAccelerationSystem, GravitySystem, MovementSystem
 
 from speck.scenarios.base_scenarios import generate_scene_smallbody, generate_scene_2smallbody
@@ -14,10 +14,7 @@ import time
 
 # Config
 dt = 1/60
-timewarp = 3600.0*24
-
-end_timewarp = 10.0
-end_time = 10.0
+timewarp = 1
 
 
 # Create a world
@@ -33,23 +30,8 @@ world.add_system(MovementSystem())
 generate_scene_2smallbody(world)
 
 # Set up rendering
-camera = Camera()
-hud = HUD(world, camera)
-renderer = PygletRenderer2D(world, camera, hud)
-
-# Set up input
-input_handler = InputHandler(camera)
-renderer.window.push_handlers(input_handler)
-
-
-# Set up rendering
-camera2 = Camera()
-hud2 = HUD(world, camera2)
-renderer2 = PygletRenderer2D(world, camera2, hud2)
-
-# Set up input
-input_handler2 = InputHandler(camera2)
-renderer2.window.push_handlers(input_handler2)
+windows = []
+main_window = ViewportWindow(world, windows, width=1800, height=900)
 
 
 
@@ -60,16 +42,7 @@ renderer2.window.push_handlers(input_handler2)
 start = time.perf_counter()
 def update(dt):
     world.update(dt)
-    hud.update_ups(dt)
-
-    # Testing time warp schedule
-    if time.perf_counter()-start >= end_time:
-        world.timewarp = end_timewarp
-
-    # Debugging:
-    # positions = world.get_component(Position)
-    # for eid, pos in positions.items():
-    #     print(f"eid={eid} x={pos.x:.4f} y={pos.y:.4f}")
+    main_window.hud.update_ups(dt)
 
 pyglet.clock.schedule_interval(update, dt)
 pyglet.app.run()
