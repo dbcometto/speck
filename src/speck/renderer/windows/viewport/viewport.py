@@ -12,6 +12,7 @@ from ....components.dynamics import Position
 from ....components.rendering import RenderData, RenderType
 from ....config import POINT_ICON_RADIUS, MIN_BODY_SCREEN_RADIUS, SELECT_SQUARE_PADDING
 from ....config import SELECTED_COLOR, OTHER_COLOR
+from ....utils import _hex_to_rgb
 
 class ViewportWindow(SpeckWindow):
     """A 2D renderer using Pyglet"""
@@ -53,7 +54,7 @@ class ViewportWindow(SpeckWindow):
 
             data = renderdatas[eid]
             color = SELECTED_COLOR if eid == self.input_handler.selected_eid else OTHER_COLOR
-            tuple_color = self._hex_to_rgb(color)
+            tuple_color = _hex_to_rgb(color)
 
             if data.render_type == RenderType.POINT:
                 if sx < 0 or sx > self.width or sy < 0 or sy > self.height:
@@ -83,7 +84,7 @@ class ViewportWindow(SpeckWindow):
                     y=sy - size/2, 
                     width=size, 
                     height=size, 
-                    color=self._hex_to_rgb(SELECTED_COLOR),
+                    color=_hex_to_rgb(SELECTED_COLOR),
                     batch=batch
                 ))
 
@@ -95,6 +96,17 @@ class ViewportWindow(SpeckWindow):
         self.width = width
         self.height = height
 
+
+    def on_close(self):
+        super().on_close()
+
+        viewers = [v for v in self.windows if isinstance(v,ViewportWindow)]
+        if len(viewers) < 1:
+            pyglet.app.exit()
+
+
+
+    # Helpers
 
     def _update_follow(self) -> None:
         """Make the camera track an entity"""

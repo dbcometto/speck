@@ -32,7 +32,8 @@ generate_scene_2smallbody(world)
 # Set up rendering
 windows = []
 main_window = ViewportWindow(world, windows)
-test_window = InspectorWindow(world, windows, 2)
+# second_window = ViewportWindow(world, windows)
+test_window = InspectorWindow(world, windows, eid=2)
 
 
 
