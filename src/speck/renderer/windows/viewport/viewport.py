@@ -29,6 +29,7 @@ class ViewportWindow(SpeckWindow):
         self.window.push_handlers(self)
         self.window.push_handlers(self.camera)
         self.window.push_handlers(self.input_handler)
+        self.window.push_handlers(self.input_handler.keys)
         self.window.push_handlers(self.hud)
     
     def on_draw(self):
@@ -37,6 +38,7 @@ class ViewportWindow(SpeckWindow):
         dt = now - self._last_draw
         self._last_draw = now
         self.hud.update_fps(dt)
+        self.input_handler._update_camera_keys(dt)
 
         self._update_follow()
 

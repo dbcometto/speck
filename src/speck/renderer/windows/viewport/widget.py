@@ -61,20 +61,18 @@ class Widget(ABC):
             self._prev_parent_width = width
             self._prev_parent_height = height
             return
-    
+
         dw = width - self._prev_parent_width
         dh = height - self._prev_parent_height
 
-        if self.anchor_top:
+        if self.anchor_top and not self.anchor_bottom:
             self.y += dh
-        if self.anchor_right:
-            self.x += dw
         if self.anchor_right and not self.anchor_left:
-            pass  # x already moved
+            self.x += dw
         if self.anchor_left and self.anchor_right:
-            self.width += dw  # stretch horizontally
+            self.width += dw   # stretch, don't move x
         if self.anchor_top and self.anchor_bottom:
-            self.height += dh  # stretch vertically
+            self.height += dh  # stretch, don't move y
 
         self._prev_parent_width = width
         self._prev_parent_height = height
@@ -337,6 +335,12 @@ class PanelWidget(Widget):
         for child in self.children:
             child.on_mouse_motion(x, y, dx, dy)
         return False
+    
+    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers) -> bool:
+        for child in self.children:
+            if child.on_mouse_drag(x, y, dx, dy, buttons, modifiers):
+                return True
+        return False
 
     def on_resize(self, width: int, height: int) -> None:
         super().on_resize(width, height)
@@ -362,11 +366,12 @@ class PanelWidget(Widget):
 
 class SelectionPanelWidget(PanelWidget):
     """Shows info about the selected entity"""
-    def __init__(self, world: World, input_handler, parent_width: int = 800, parent_height: int = 600) -> None:
+    def __init__(self, world: World, input_handler, left_offset = 0, parent_width: int = 800, parent_height: int = 600) -> None:
         super().__init__(x=0, y=0, width=200, height=100,
                          layout="vertical", gap=2, padding=6)
         self.world = world
         self.input_handler = input_handler
+        self.left_offset = left_offset
         self._built_for_eid: int | None = None
         self._parent_width = parent_width
         self._parent_height = parent_height
@@ -393,7 +398,7 @@ class SelectionPanelWidget(PanelWidget):
         self._reposition_to_corner()
 
     def _reposition_to_corner(self) -> None:
-        self.x = 10  # left side
+        self.x = self.left_offset + 10  # left side
         self.y = 10
         self._on_reposition()
 
@@ -429,13 +434,15 @@ class SelectionPanelWidget(PanelWidget):
 class ActionBarWidget(PanelWidget):
     """Shows actions for the selected entity"""
     def __init__(self, world: World, input_handler, 
-                 on_minimap_follow: Callable,
+                 on_minimap_follow: Callable, left_offset = 0,
                  parent_width: int = 800, parent_height: int = 600) -> None:
         super().__init__(x=0, y=0, width=0, height=40,
                          layout="horizontal", gap=4, padding=4, alpha=0)
         self.world = world
         self.input_handler = input_handler
         self.on_minimap_follow = on_minimap_follow
+        self.left_offset = left_offset
+
         self._built_for_eid: int | None = None
         self._parent_width = parent_width
         self._parent_height = parent_height
@@ -476,7 +483,7 @@ class ActionBarWidget(PanelWidget):
         self._reposition()
 
     def _reposition(self) -> None:
-        self.x = 210  # right of selection panel
+        self.x = self.left_offset + 210  # right of selection panel
         self.y = 10
         self._on_reposition()
 
@@ -517,15 +524,20 @@ class MinimapWidget(Widget):
                  main_camera: Camera,
                  view_range: float = 1000.0,
                  anchor_top: bool = False, anchor_right: bool = False,
-                 anchor_bottom: bool = False, anchor_left: bool = False):
+                 anchor_bottom: bool = False, anchor_left: bool = False,
+                 padding = 10, border = 3,
+                 alpha = 1):
         super().__init__(x, y, width, height, anchor_top, anchor_right, anchor_bottom, anchor_left)
         self.world = world
         self.main_camera = main_camera
         self._background: pyglet.shapes.Rectangle | None = None
+        self._border: pyglet.shapes.Rectangle | None = None
         self._shapes: list = []
-        self._padding = 10
+        self._padding = padding
+        self.border = border
         self._pressed = False
         self._is_dragging = False
+        self.alpha = alpha
 
         self._follow_eid: int | None = None
 
@@ -560,18 +572,33 @@ class MinimapWidget(Widget):
             self.camera.x = 0.0
             self.camera.y = 0.0
 
+        # Draw background and border
         if self._background is None:
             self._background = pyglet.shapes.Rectangle(
                 x=self.x, y=self.y,
                 width=self.width, height=self.height,
-                color=_hex_to_rgb(DARK_GRAY_COLOR),
+                color=_hex_to_rgb(DARK_GRAY_COLOR, self.alpha),
                 batch=batch
             )
-            self._background.opacity = 128
         else:
-            self._background.opacity = 128
             self._background.batch = batch
 
+        if self._border is None:
+            self._border = pyglet.shapes.Box(
+            x=self.x, y=self.y,
+            width=self.width, height=self.height,
+            thickness=self.border,
+            color=_hex_to_rgb(GRAY_COLOR,self.alpha),
+            batch=batch
+        )
+        else:
+            self._border.batch = batch
+
+        
+
+
+
+        # Draw entities
         positions = self.world.get_component(Position)
 
         if not positions:
@@ -581,10 +608,10 @@ class MinimapWidget(Widget):
         for eid, pos in positions.items():
             mx, my = self._world_to_minimap(pos.x, pos.y)
             # cull outside minimap bounds
-            if mx < self.x or mx > self.x + self.width or my < self.y or my > self.y + self.height:
+            if mx < self.x + self.border or mx > self.x + self.width - self.border or my < self.y + self.border or my > self.y + self.height - self.border:
                 continue
             color = MINIMAP_FOCUS_COLOR if eid == self._follow_eid else OTHER_COLOR
-            tuple_color = _hex_to_rgb(color)
+            tuple_color = _hex_to_rgb(color,self.alpha)
             self._shapes.append(pyglet.shapes.Circle(
                 x=mx, y=my, radius=2,
                 color=tuple_color,
@@ -598,20 +625,23 @@ class MinimapWidget(Widget):
         half_h = self.main_camera.height / 2 / self.main_camera.zoom
 
         # corners of main viewport in world space
-        left   = self.main_camera.x - half_w
-        right  = self.main_camera.x + half_w
-        bottom = self.main_camera.y - half_h
-        top    = self.main_camera.y + half_h
+        center_x = self.main_camera.x + self.main_camera.origin_x
+        center_y = self.main_camera.y + self.main_camera.origin_y
+
+        left   = center_x - half_w
+        right  = center_x + half_w
+        bottom = center_y - half_h
+        top    = center_y + half_h
 
         # convert to minimap space
         mx1, my1 = self._world_to_minimap(left, bottom)
         mx2, my2 = self._world_to_minimap(right, top)
 
         # clamp to minimap bounds
-        mx1 = max(mx1, self.x)
-        my1 = max(my1, self.y)
-        mx2 = min(mx2, self.x + self.width)
-        my2 = min(my2, self.y + self.height)
+        mx1 = max(mx1, self.x + self.border)
+        my1 = max(my1, self.y + self.border)
+        mx2 = min(mx2, self.x + self.width - self.border)
+        my2 = min(my2, self.y + self.height - self.border)
 
         box_w = mx2 - mx1
         box_h = my2 - my1
@@ -622,7 +652,7 @@ class MinimapWidget(Widget):
                 width=box_w,
                 height=box_h,
                 thickness=1,
-                color=_hex_to_rgb(SELECTED_COLOR),
+                color=_hex_to_rgb(SELECTED_COLOR, self.alpha),
                 batch=batch
             ))
 
@@ -637,6 +667,11 @@ class MinimapWidget(Widget):
             self._background.y = self.y
             self._background.width = self.width
             self._background.height = self.height
+        if self._border:
+            self._border.x = self.x
+            self._border.y = self.y
+            self._border.width = self.width
+            self._border.height = self.height
 
     def on_resize(self, width: int, height: int) -> None:
         super().on_resize(width, height)
@@ -663,7 +698,7 @@ class MinimapWidget(Widget):
         return False
 
     def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers) -> bool:
-        if self.hit_test(x, y) and buttons & pyglet.window.mouse.LEFT and self._pressed:
+        if buttons & pyglet.window.mouse.LEFT and self._pressed:
             self._is_dragging = True
             self.main_camera.x += dx / self.camera.zoom
             self.main_camera.y += dy / self.camera.zoom
@@ -678,6 +713,216 @@ class MinimapWidget(Widget):
 
 
 
+
+
+
+
+class IconStripWidget(PanelWidget):
+    """A vertical strip of icon buttons that toggle panels"""
+    def __init__(self, world: World, x: int, y: int, width: int, height: int,
+                 anchor_top: bool = False, anchor_right: bool = False,
+                 anchor_bottom: bool = False, anchor_left: bool = False,
+                 bottom_offset = 0) -> None:
+        super().__init__(x, y, width, height,
+                         color=DARK_GRAY_COLOR,
+                         layout="vertical", gap=2, padding=2,
+                         anchor_top=anchor_top, anchor_right=anchor_right,
+                         anchor_bottom=anchor_bottom, anchor_left=anchor_left)
+        self.world = world
+        self._panels: dict[str, PanelWidget] = {}
+        self._panel_visible: dict[str, bool] = {}
+        self.bottom_offset = bottom_offset
+
+    def add_panel(self, key: str, label: str, panel: PanelWidget) -> None:
+        """Register a panel and add its toggle button"""
+        self._panels[key] = panel
+        self._panel_visible[key] = False
+
+        self.add(TextButtonWidget(
+            x=0, y=0,
+            width=self.width - self.padding * 2,
+            height=self.width - self.padding * 2,  # square buttons
+            text=label,
+            action=lambda k=key: self._toggle(k),
+            active=lambda k=key: self._panel_visible[k]
+        ))
+
+    def _toggle(self, key: str) -> None:
+        self._panel_visible[key] = not self._panel_visible[key]
+        self._panels[key].visible = self._panel_visible[key]
+
+    def hit_test(self, x: int, y: int) -> bool:
+        if super().hit_test(x, y):
+            return True
+        for key, panel in self._panels.items():
+            if self._panel_visible[key] and panel.hit_test(x, y):
+                return True
+        return False
+
+    def draw(self, batch: pyglet.graphics.Batch) -> None:
+        super().draw(batch)
+        for key, panel in self._panels.items():
+            if self._panel_visible[key]:
+                panel.draw(batch)
+
+    def on_mouse_press(self, x, y, button, modifiers) -> bool:
+        for key, panel in self._panels.items():
+            if self._panel_visible[key] and panel.hit_test(x, y):
+                return panel.on_mouse_press(x, y, button, modifiers)
+        return super().on_mouse_press(x, y, button, modifiers)
+
+    def on_mouse_release(self, x, y, button, modifiers) -> bool:
+        for key, panel in self._panels.items():
+            if self._panel_visible[key]:
+                panel.on_mouse_release(x, y, button, modifiers)
+        return super().on_mouse_release(x, y, button, modifiers)
+
+    def on_mouse_motion(self, x, y, dx, dy) -> bool:
+        for key, panel in self._panels.items():
+            if self._panel_visible[key]:
+                panel.on_mouse_motion(x, y, dx, dy)
+        return super().on_mouse_motion(x, y, dx, dy)
+
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y) -> bool:
+        for key, panel in self._panels.items():
+            if self._panel_visible[key] and panel.hit_test(x, y):
+                return panel.on_mouse_scroll(x, y, scroll_x, scroll_y)
+        return False
+
+    def on_resize(self, width, height) -> None:
+        super().on_resize(width, height)
+        for panel in self._panels.values():
+            panel.x = self.x + self.width
+            panel.y = self.y + self.bottom_offset
+            panel.height = self.height - self.bottom_offset
+            try:
+                panel.bottom_offset = self.bottom_offset
+            except:
+                pass
+            panel._on_reposition()
+
+
+
+
+
+
+
+
+class EntityListPanelWidget(PanelWidget):
+    """A scrollable list of all entities"""
+    def __init__(self, world: World, input_handler, x: int, y: int, 
+                 width: int, height: int, 
+                 bottom_offset = 0, content_padding = 4) -> None:
+        super().__init__(x, y, width, height,
+                         color=GRAY_COLOR,
+                         layout="absolute", gap=0, padding=0)
+        self.world = world
+        self.input_handler = input_handler
+        self._scroll_offset = 0
+        self._row_height = 22
+        self._labels: list = []
+        self._buttons: list = []
+        self._header: pyglet.text.Label | None = None
+        self.bottom_offset = bottom_offset
+        self.content_padding = 4
+
+    def _get_entities(self) -> list[int]:
+        positions = self.world.get_component(Position)
+        return list(positions.keys())
+
+    def draw(self, batch: pyglet.graphics.Batch) -> None:
+        super().draw(batch)
+
+        # Header
+        self._header = pyglet.text.Label(
+            text="Entities",
+            x=self.x + 6, y=self.y + self.height - 20,
+            font_name="Consolas",
+            font_size=11,
+            color=_hex_to_rgb(SELECTED_COLOR),
+            batch=batch
+        )
+
+        # Entity rows
+        entities = self._get_entities()
+        total = len(entities)
+
+        content_y = self.y + self.content_padding
+        content_height = self.height - 30 - self.content_padding*2
+
+        visible_rows = max(0, content_height // self._row_height)
+        max_offset = max(0, total - visible_rows)
+        self._scroll_offset = min(self._scroll_offset, max_offset)
+
+        visible = entities[self._scroll_offset:self._scroll_offset + visible_rows]
+
+        self._labels = []
+        self._buttons = []
+        for i, eid in enumerate(visible):
+            y = content_y + content_height - (i + 1) * self._row_height
+            color = SELECTED_COLOR if eid == self.input_handler.selected_eid else OTHER_COLOR
+            self._labels.append(pyglet.text.Label(
+                text=f"[{eid}]",
+                x=self.x + 6, y=y + (self._row_height - 11) // 2,
+                font_name="Consolas",
+                font_size=11,
+                color=_hex_to_rgb(color),
+                batch=batch
+            ))
+
+        # Scrollbar
+        if total > visible_rows and content_height > 0 and visible_rows > 0:
+            scrollbar_height = content_height
+            scrollbar_x = self.x + self.width - 6
+            thumb_ratio = visible_rows / total
+            thumb_height = max(10, int(scrollbar_height * thumb_ratio))
+            
+            scroll_ratio = self._scroll_offset / max(1, total - visible_rows)
+            thumb_y = content_y + int((scrollbar_height - thumb_height) * (1 - scroll_ratio))
+
+
+            # track
+            self._labels.append(pyglet.shapes.Rectangle(
+                x=scrollbar_x, y=content_y,
+                width=4, height=scrollbar_height,
+                color=_hex_to_rgb(DARK_GRAY_COLOR),
+                batch=batch
+            ))
+
+            # thumb
+            self._labels.append(pyglet.shapes.Rectangle(
+                x=scrollbar_x, y=thumb_y,
+                width=4, height=thumb_height,
+                color=_hex_to_rgb(SELECTED_COLOR),
+                batch=batch
+            ))
+
+    def on_mouse_press(self, x, y, button, modifiers) -> bool:
+        if not self.hit_test(x, y):
+            return False
+        entities = self._get_entities()
+        
+        content_y = self.y + self.content_padding
+        content_height = self.height - 30 - self.content_padding * 2
+        visible_rows = content_height // self._row_height
+        
+        visible = entities[self._scroll_offset:self._scroll_offset + visible_rows]
+        for i, eid in enumerate(visible):
+            row_y = content_y + content_height - (i + 1) * self._row_height
+            if row_y <= y <= row_y + self._row_height:
+                self.input_handler.selected_eid = eid
+                return True
+        return True
+
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y) -> bool:
+        if self.hit_test(x, y):
+            content_height = self.height - 30 - self.content_padding * 2
+            visible_rows = content_height // self._row_height
+            entities = self._get_entities()
+            max_offset = max(0, len(entities) - visible_rows)
+            self._scroll_offset = max(0, min(max_offset, self._scroll_offset - int(scroll_y)))
+            return True
+        return False
 
 
 

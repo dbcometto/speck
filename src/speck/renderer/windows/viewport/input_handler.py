@@ -7,7 +7,7 @@ from ....core import World
 from ....components.dynamics import Position
 from .camera import Camera
 from ....renderer.windows.inspector import InspectorWindow
-from ....config import SELECTION_TOLERANCE, KEYBINDS, ZOOM_FACTOR
+from ....config import SELECTION_TOLERANCE, KEYBINDS, ZOOM_FACTOR, CAMERA_SENSITIVITY, TIMEWARP_PRESETS
 
 class InputHandler():
     """An input handler"""
@@ -25,6 +25,9 @@ class InputHandler():
         self.hover_eid: int | None = None
 
         self.is_following = False
+
+        self.keys = pyglet.window.key.KeyStateHandler()
+        self.old_timewarp = None
 
     def set_minimap_follow(self, on_minimap_follow: Callable) -> None:
         """Allow the keybinding for minimap following to work"""
@@ -65,6 +68,25 @@ class InputHandler():
             self.camera.origin_x = 0.0
             self.camera.origin_y = 0.0
             self.is_following = False
+
+
+    def timewarp_up(self) -> None:
+        presets = TIMEWARP_PRESETS
+        current = self.world.timewarp
+        # find next preset above current
+        for v in presets:
+            if v > current:
+                self.world.timewarp = v
+                return
+
+    def timewarp_down(self) -> None:
+        presets = TIMEWARP_PRESETS
+        current = self.world.timewarp
+        # find next preset below current
+        for v in reversed(presets):
+            if v < current:
+                self.world.timewarp = v
+                return
 
 
     # Pyglet Handlers
@@ -113,13 +135,40 @@ class InputHandler():
     def on_mouse_motion(self, x, y, dx, dy) -> None:
         self.hover_eid = self._pick_entity(*self.camera.screen_to_world(x, y))
 
+    def _update_camera_keys(self, dt: float) -> None:
+        handled = False
+        speed = CAMERA_SENSITIVITY / self.camera.zoom
 
+        for key in KEYBINDS["move_up"]:
+            if self.keys[key]:
+                self.camera.y += speed * dt
+                handled = True
+
+        for key in KEYBINDS["move_down"]:
+            if self.keys[key]:
+                self.camera.y -= speed * dt
+                handled = True
+
+        for key in KEYBINDS["move_left"]:
+            if self.keys[key]:
+                self.camera.x -= speed * dt
+                handled = True
+
+        for key in KEYBINDS["move_right"]:
+            if self.keys[key]:
+                self.camera.x += speed * dt
+                handled = True
+
+        return handled
 
     def on_key_press(self, symbol, modifiers) -> None:
         handled = False
 
+
+
+        # Entity Interactions
         if symbol in KEYBINDS["follow"]:
-            if not self.is_following:
+            if not self.is_following or self.is_following and self.selected_eid != self.follow_eid:
                 self.set_follower(self.selected_eid)
             else:
                 self.set_follower(None)
@@ -141,9 +190,36 @@ class InputHandler():
         if symbol in KEYBINDS["focus_minimap"]:
             self.on_minimap_follow(self.selected_eid)
             handled = True
+        
 
-        if handled:
-            return True
+
+        # Time
+        if symbol in KEYBINDS["pause"]:
+            if self.world.timewarp == 0.0:
+                if self.old_timewarp is not None:
+                    self.world.timewarp = self.old_timewarp
+                    self.old_timewarp = None
+                else:
+                    self.world.timewarp = 1.0
+            else:
+                self.old_timewarp = self.world.timewarp
+                self.world.timewarp = 0.0
+
+            handled = True
+
+        if symbol in KEYBINDS["increase_timewarp"]:
+            self.timewarp_up()
+            handled = True
+
+        if symbol in KEYBINDS["decrease_timewarp"]:
+            self.timewarp_down()
+            handled = True
+
+        
+
+        
+    
+        return handled
         
 
 

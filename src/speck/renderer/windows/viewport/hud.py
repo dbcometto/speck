@@ -4,9 +4,10 @@ import pyglet
 from ....core.world import World
 from .camera import Camera
 from .input_handler import InputHandler
-from ....config import SELECTED_COLOR, OTHER_COLOR, KEYBINDS
+from ....config import SELECTED_COLOR, OTHER_COLOR, DARK_GRAY_COLOR, GRAY_COLOR, KEYBINDS
+from ....config import SIDEBAR_ICON_WIDTH, SIDEBAR_PANEL_WIDTH, BOTTOM_BAR_HEIGHT, MINIMAP_WIDTH, MINIMAP_HEIGHT, TOP_BAR_HEIGHT
 from ....utils import _hex_to_rgb
-from .widget import Widget, TextWidget, TextButtonWidget, PanelWidget, SelectionPanelWidget, ActionBarWidget, MinimapWidget
+from .widget import Widget, TextWidget, TextButtonWidget, PanelWidget, SelectionPanelWidget, ActionBarWidget, MinimapWidget, IconStripWidget, EntityListPanelWidget
 
 class HUD():
     """The HUD"""
@@ -18,7 +19,7 @@ class HUD():
         self.height = height
         self.input_handler = input_handler
 
-        self.show_debug = True
+        self.show_debug = False
         # self.show_scale = True # TODO
         # self.show_grid = False
 
@@ -60,6 +61,15 @@ class HUD():
         )
         self._widgets.append(self._debug)
 
+        self._top_bar = PanelWidget(
+            x=0, y=height - TOP_BAR_HEIGHT,
+            width=width, height=TOP_BAR_HEIGHT,
+            color=DARK_GRAY_COLOR,
+            layout="absolute",
+            anchor_top=True, anchor_left=True, anchor_right=True
+        )
+        self._widgets.append(self._top_bar)
+
 
 
         # Timewarp buttons
@@ -88,11 +98,11 @@ class HUD():
 
 
         # Selection panel
-        self._selection_panel = SelectionPanelWidget(self.world, self.input_handler, width, height)
+        self._selection_panel = SelectionPanelWidget(self.world, self.input_handler, SIDEBAR_ICON_WIDTH, width, height)
         self._widgets.append(self._selection_panel)
 
         # Actions Panel
-        self._action_bar = ActionBarWidget(self.world, self.input_handler, self.set_minimap_follow, width, height)
+        self._action_bar = ActionBarWidget(self.world, self.input_handler, self.set_minimap_follow, SIDEBAR_ICON_WIDTH, width, height)
         self._widgets.append(self._action_bar)
 
 
@@ -100,12 +110,38 @@ class HUD():
         self._minimap = MinimapWidget(
             world=self.world,
             main_camera=self.camera,
-            x=width - 210, y=height - 210,
-            width=200, height=200,
+            x=width - 10 - MINIMAP_WIDTH, y=height - TOP_BAR_HEIGHT - 10 - MINIMAP_HEIGHT,
+            width=MINIMAP_WIDTH, height=MINIMAP_HEIGHT,
             anchor_top=True, anchor_right=True
         )
         self._widgets.append(self._minimap)
         input_handler.set_minimap_follow(self.set_minimap_follow)
+
+
+
+        # Sidebar
+        sidebar_height = height - BOTTOM_BAR_HEIGHT
+
+        self._icon_strip = IconStripWidget(
+            world=self.world,
+            x=0, y=0,
+            width=SIDEBAR_ICON_WIDTH,
+            height=height - TOP_BAR_HEIGHT,
+            anchor_top=True,anchor_bottom=True,
+            bottom_offset=BOTTOM_BAR_HEIGHT
+        )
+
+        entity_panel = EntityListPanelWidget(
+            world=self.world,
+            input_handler=self.input_handler,
+            x=SIDEBAR_ICON_WIDTH, y=BOTTOM_BAR_HEIGHT,
+            width=SIDEBAR_PANEL_WIDTH,
+            height=sidebar_height,
+            bottom_offset=BOTTOM_BAR_HEIGHT
+        )
+
+        self._icon_strip.add_panel("E", "E", entity_panel)
+        self._widgets.append(self._icon_strip)
 
 
 
@@ -163,6 +199,7 @@ class HUD():
     def on_resize(self, width, height) -> None:
         self.width = width
         self.height = height
+
         for w in self._widgets:
             w.on_resize(width, height)
 

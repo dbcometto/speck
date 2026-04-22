@@ -14,7 +14,7 @@ import time
 
 # Config
 dt = 1/60
-timewarp = 1.0
+timewarp = 1
 
 
 # Create a world
