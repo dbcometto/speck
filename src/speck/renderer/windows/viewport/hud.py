@@ -6,7 +6,7 @@ from .camera import Camera
 from .input_handler import InputHandler
 from ....config import SELECTED_COLOR, OTHER_COLOR, KEYBINDS
 from ....utils import _hex_to_rgb
-from .widget import Widget, TextWidget, TextButtonWidget
+from .widget import Widget, TextWidget, TextButtonWidget, PanelWidget, SelectionPanelWidget, ActionBarWidget
 
 class HUD():
     """The HUD"""
@@ -46,8 +46,10 @@ class HUD():
                 f"twarp={self.world.timewarp:.1f}x",
                 f"sub_dt={self.world.last_sub_dt:.1f}s",
                 f"sub_steps={self.world.last_sub_steps:<4d}",
+                "\n",
                 f"ups={self._ups:.0f}",
                 f"fps={self._fps:.0f}",
+                "\n",
                 f"cursor=({self.cursor_world_x:.1f}, {self.cursor_world_y:.1f})",
                 f"select={self.input_handler.selected_eid}",
                 f"hover={self.input_handler.hover_eid}",
@@ -61,20 +63,40 @@ class HUD():
 
 
         # Timewarp buttons
-        timewarps = {"P": 0, "1s/s": 1, "1min/s": 60, "1hr/s": 3600, "1d/s": 86400}
-        x = 10
-        y = 10
-        btn_w = 55
-        btn_h = 22
+        timewarps = {"  ||": 0, "1s/s": 1, "1min/s": 60, "1hr/s": 3600, "1d/s": 86400}
+
+        width_per_button = 50
+        gap_per_button = 5
+
+        timewarp_panel = PanelWidget(
+            x=0, y=10,  # x will be set by anchor
+            width=width_per_button*len(timewarps)+gap_per_button*(len(timewarps)-1), 
+            height=26,
+            layout="horizontal", gap=gap_per_button, padding=0,
+            anchor_bottom=True, anchor_right=True
+        )
+        timewarp_panel.x = width - timewarp_panel.width - 10
         for name, value in timewarps.items():
-            self._widgets.append(TextButtonWidget(
-                x=x, y=y, width=btn_w, height=btn_h,
+            timewarp_panel.add(TextButtonWidget(
+                x=0, y=0,  # doesn't matter, layout overrides
+                width=width_per_button, height=26,
                 text=name,
                 action=lambda v=value: setattr(self.world, 'timewarp', v),
                 active=lambda v=value: self.world.timewarp == v,
-                anchor_bottom = True, anchor_left = True
             ))
-            x += btn_w + 4
+        self._widgets.append(timewarp_panel)
+
+
+        # Selection panel
+        self._selection_panel = SelectionPanelWidget(self.world, self.input_handler, width, height)
+        self._widgets.append(self._selection_panel)
+
+        # Actions Panel
+        self._action_bar = ActionBarWidget(self.world, self.input_handler, width, height)
+        self._widgets.append(self._action_bar)
+
+
+
 
 
     def update_ups(self, dt: float) -> None:
@@ -97,11 +119,20 @@ class HUD():
 
 
     # Pyglet Handlers
-    def on_mouse_press(self, x, y, button, modifiers) -> None:
+    def on_mouse_press(self, x, y, button, modifiers) -> bool:
         for w in reversed(self._widgets):
-            if w.hit_test(x, y) and w.on_mouse_press(x, y, button, modifiers):
-                return
-
+            if w.hit_test(x, y):
+                w.on_mouse_press(x, y, button, modifiers)
+                return True  # consumed regardless of widget action
+        return False
+            
+    def on_mouse_release(self, x, y, button, modifiers) -> bool:
+        for w in reversed(self._widgets):
+            if w.hit_test(x, y):
+                w.on_mouse_release(x, y, button, modifiers)
+                return True
+        return False
+    
     def on_mouse_motion(self, x, y, dx, dy) -> None:
         self.cursor_world_x, self.cursor_world_y = self.camera.screen_to_world(x, y)
         for w in self._widgets:
@@ -121,3 +152,12 @@ class HUD():
             self.show_debug = not self.show_debug
             return True
         return False
+
+
+
+
+
+
+
+
+

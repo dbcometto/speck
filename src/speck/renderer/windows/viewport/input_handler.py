@@ -5,14 +5,16 @@ import math
 from ....core import World
 from ....components.dynamics import Position
 from .camera import Camera
+from ....renderer.windows.inspector import InspectorWindow
 from ....config import SELECTION_TOLERANCE, KEYBINDS
 
 class InputHandler():
     """An input handler"""
-    def __init__(self, world: World, camera: Camera):
+    def __init__(self, world: World, camera: Camera, windows: list):
         """Init the input handler"""
         self.camera = camera
         self.world = world
+        self.windows = windows
 
         self._zoom_factor = 1.1
         self._is_dragging = False
@@ -22,6 +24,35 @@ class InputHandler():
         self.follow_eid: int | None = None
         self.hover_eid: int | None = None
 
+
+    def open_inspector(self, eid: int) -> None:
+        """Open an inspector window for an entity"""
+        # check if already open
+        for w in self.windows:
+            if isinstance(w, InspectorWindow) and w.eid == eid:
+                return
+        self.windows.append(InspectorWindow(self.world, self.windows, eid))
+
+
+
+    def set_follower(self, eid: int | None = None) -> None:
+        """Set the camera for a new follower or reset the origin"""
+        if eid is not None:
+            positions = self.world.get_component(Position)
+            if eid in positions:
+                self.follow_eid = eid
+                pos = positions[eid]
+                old_origin_x = self.camera.origin_x
+                old_origin_y = self.camera.origin_y
+                self.camera.origin_x = pos.x
+                self.camera.origin_y = pos.y
+                self.camera.x = self.camera.x - pos.x + old_origin_x
+                self.camera.y = self.camera.y - pos.y + old_origin_y
+        else:
+            self.camera.x = self.camera.x + self.camera.origin_x
+            self.camera.y = self.camera.y + self.camera.origin_y
+            self.camera.origin_x = 0.0
+            self.camera.origin_y = 0.0
 
 
     # Pyglet Handlers
@@ -77,13 +108,14 @@ class InputHandler():
 
         if symbol in KEYBINDS["follow"]:
             if self.selected_eid is not None:
-                self.follow_eid = self.selected_eid
-                self._set_follower(self.follow_eid)
+                self.set_follower(self.follow_eid)
+                handled = True
+            else:
+                self.set_follower(None)
                 handled = True
 
         if symbol in KEYBINDS["unfollow"]:
-            self.follow_eid = None
-            self._set_follower(None)
+            self.set_follower(None)
             handled = True
 
         if symbol in KEYBINDS["deselect"]:
@@ -97,23 +129,6 @@ class InputHandler():
 
 
 
-    # Helpers
 
-    def _set_follower(self, eid: int | None = None) -> None:
-        """Set the camera for a new follower or reset the origin"""
-        if eid is not None:
-            positions = self.world.get_component(Position)
-            if self.follow_eid in positions:
-                pos = positions[eid]
-                old_origin_x = self.camera.origin_x
-                old_origin_y = self.camera.origin_y
-                self.camera.origin_x = pos.x
-                self.camera.origin_y = pos.y
-                self.camera.x = self.camera.x - pos.x + old_origin_x
-                self.camera.y = self.camera.y - pos.y + old_origin_y
-        else:
-            self.camera.x = self.camera.x + self.camera.origin_x
-            self.camera.y = self.camera.y + self.camera.origin_y
-            self.camera.origin_x = 0.0
-            self.camera.origin_y = 0.0
+    
             

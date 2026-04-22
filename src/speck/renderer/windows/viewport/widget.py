@@ -2,9 +2,16 @@
 from abc import ABC, abstractmethod
 import pyglet
 from typing import Callable
+from enum import Enum
 
+from ....core import World
 from ....utils import _hex_to_rgb
 from ....config import SELECTED_COLOR, GRAY_COLOR, OTHER_COLOR
+
+
+
+
+
 
 class Widget(ABC):
     """Base widget class"""
@@ -32,6 +39,9 @@ class Widget(ABC):
     def draw(self, batch: pyglet.graphics.Batch) -> None: ...
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool:
+        return False
+    
+    def on_mouse_release(self, x: int, y: int, button: int, modifiers: int) -> bool:
         return False
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool:
@@ -76,12 +86,21 @@ class ClickableWidget(Widget):
         self.action = action
         self.active = active
         self._hovered = False
+        self._pressed = False
 
     def on_mouse_press(self, x, y, button, modifiers) -> bool:
         if self.hit_test(x, y):
+            self._pressed = True
+            return True
+        return False
+
+    def on_mouse_release(self, x, y, button, modifiers) -> bool:
+        if self._pressed and self.hit_test(x, y):
             if self.action:
                 self.action()
+            self._pressed = False
             return True
+        self._pressed = False
         return False
 
     def on_mouse_motion(self, x, y, dx, dy) -> bool:
@@ -189,7 +208,10 @@ class TextButtonWidget(ClickableWidget, TextWidget):
                             xpadding=xpadding)
         self.action = action
         self.active = active
+
         self._hovered = False
+        self._pressed = False
+
         self.active_color = active_color
         self.hover_color = hover_color
 
@@ -208,30 +230,82 @@ class TextButtonWidget(ClickableWidget, TextWidget):
 
 
 
+class Layout(Enum):
+    ABSOLUTE = "absolute"
+    VERTICAL = "vertical"
+    HORIZONTAL = "horizontal"
+    GRID = "grid"
 
-class Panel(Widget):
-    """A container widget with a background"""
+class PanelWidget(Widget):
+    """A container widget with a background and layout"""
     def __init__(self, x: int, y: int, width: int, height: int,
                  color: str = GRAY_COLOR,
-                 anchor_top=False, anchor_right=False, anchor_bottom=False, anchor_left=False) -> None:
+                 alpha: float = 1,
+                 layout: str = "absolute",
+                 gap: int = 4,
+                 padding: int = 4,
+                 columns: int = 2,
+                 anchor_top: bool = False,
+                 anchor_right: bool = False,
+                 anchor_bottom: bool = False,
+                 anchor_left: bool = False) -> None:
         super().__init__(x, y, width, height, anchor_top, anchor_right, anchor_bottom, anchor_left)
         self.color = color
+        self.alpha = alpha
+        self.layout = Layout(layout)
+        self.gap = gap
+        self.padding = padding
+        self.columns = columns
         self.children: list[Widget] = []
         self._background: pyglet.shapes.Rectangle | None = None
 
     def add(self, widget: Widget) -> None:
         self.children.append(widget)
+        self._apply_layout()
+
+    def _apply_layout(self) -> None:
+        if self.layout == Layout.ABSOLUTE:
+            return
+
+        elif self.layout == Layout.VERTICAL:
+            # stack top to bottom
+            cursor_y = self.y + self.height - self.padding
+            for child in self.children:
+                cursor_y -= child.height
+                child.x = self.x + self.padding
+                child.y = cursor_y
+                child._on_reposition()
+                cursor_y -= self.gap
+
+        elif self.layout == Layout.HORIZONTAL:
+            # stack left to right
+            cursor_x = self.x + self.padding
+            for child in self.children:
+                child.x = cursor_x
+                child.y = self.y + self.padding
+                child._on_reposition()
+                cursor_x += child.width + self.gap
+
+        elif self.layout == Layout.GRID:
+            cell_width = (self.width - self.padding * 2 - self.gap * (self.columns - 1)) // self.columns
+            for i, child in enumerate(self.children):
+                col = i % self.columns
+                row = i // self.columns
+                child.width = cell_width
+                child.x = self.x + self.padding + col * (cell_width + self.gap)
+                child.y = self.y + self.height - self.padding - (row + 1) * (child.height + self.gap) + self.gap
+                child._on_reposition()
 
     def draw(self, batch: pyglet.graphics.Batch) -> None:
         if self._background is None:
             self._background = pyglet.shapes.Rectangle(
                 x=self.x, y=self.y,
                 width=self.width, height=self.height,
-                color=_hex_to_rgb(self.color),
+                color=_hex_to_rgb(self.color, self.alpha),
                 batch=batch
             )
         else:
-            self._background.color = _hex_to_rgb(self.color)
+            self._background.color = _hex_to_rgb(self.color, self.alpha)
             self._background.batch = batch
 
         for child in self.children:
@@ -243,6 +317,12 @@ class Panel(Widget):
             if child.hit_test(x, y) and child.on_mouse_press(x, y, button, modifiers):
                 return True
         return False
+    
+    def on_mouse_release(self, x: int, y: int, button: int, modifiers: int) -> bool:
+        for child in reversed(self.children):
+            if child.on_mouse_release(x, y, button, modifiers):
+                return True
+        return False
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool:
         for child in self.children:
@@ -252,6 +332,7 @@ class Panel(Widget):
     def on_resize(self, width: int, height: int) -> None:
         super().on_resize(width, height)
         self._on_reposition()
+        self._apply_layout()
         for child in self.children:
             child.on_resize(width, height)
 
@@ -263,62 +344,150 @@ class Panel(Widget):
             self._background.height = self.height
 
 
-class TabPanel(Panel):
-    def __init__(self, x: int, y: int, width: int, height: int,
-                 tab_height: int = 24,
-                 color: str = GRAY_COLOR,
-                 anchor_top=False, anchor_right=False, anchor_bottom=False, anchor_left=False) -> None:
-        super().__init__(x, y, width, height, color, anchor_top, anchor_right, anchor_bottom, anchor_left)
-        self.tab_height = tab_height
-        self._tabs: dict[str, Panel] = {}
-        self._active_tab: str | None = None
-        self._tab_buttons: list[Button] = []
 
-    def add_tab(self, name: str, panel: Panel) -> None:
-        self._tabs[name] = panel
-        if self._active_tab is None:
-            self._active_tab = name
 
-        tab_x = self.x + len(self._tab_buttons) * 80
-        tab_y = self.y + self.height - self.tab_height
-        self._tab_buttons.append(Button(
-            x=tab_x, y=tab_y,
-            width=80, height=self.tab_height,
-            text=name,
-            action=lambda n=name: setattr(self, '_active_tab', n),
-            active=lambda n=name: self._active_tab == n
+
+
+
+
+
+class SelectionPanelWidget(PanelWidget):
+    """Shows info about the selected entity"""
+    def __init__(self, world: World, input_handler, parent_width: int = 800, parent_height: int = 600) -> None:
+        super().__init__(x=0, y=0, width=200, height=100,
+                         layout="vertical", gap=2, padding=6)
+        self.world = world
+        self.input_handler = input_handler
+        self._built_for_eid: int | None = None
+        self._parent_width = parent_width
+        self._parent_height = parent_height
+        self._reposition_to_corner()
+
+
+
+    def _build(self, eid: int) -> None:
+        self.children.clear()
+        self._built_for_eid = eid
+
+        self.add(TextWidget(
+            x=0, y=0, width=self.width - self.padding * 2, height=30,
+            text=f"Entity {eid}",
+            font_size=12
         ))
 
+        total_height = self.padding * 2
+        for child in self.children:
+            total_height += child.height + self.gap
+        self.height = min(total_height, self._parent_height - 20)
+        self._on_reposition()
+        self._apply_layout()
+        self._reposition_to_corner()
+
+    def _reposition_to_corner(self) -> None:
+        self.x = 10  # left side
+        self.y = 10
+        self._on_reposition()
+
     def draw(self, batch: pyglet.graphics.Batch) -> None:
+        eid = self.input_handler.selected_eid
+        if eid is None:
+            return
+        if eid != self._built_for_eid:
+            self._build(eid)
         super().draw(batch)
-        for btn in self._tab_buttons:
-            btn.draw(batch)
-        if self._active_tab and self._active_tab in self._tabs:
-            self._tabs[self._active_tab].draw(batch)
 
     def on_mouse_press(self, x, y, button, modifiers) -> bool:
-        for btn in self._tab_buttons:
-            if btn.on_mouse_press(x, y, button, modifiers):
-                return True
-        if self._active_tab:
-            if self._tabs[self._active_tab].on_mouse_press(x, y, button, modifiers):
-                return True
+        if self.input_handler.selected_eid is None:
+            return False
         return super().on_mouse_press(x, y, button, modifiers)
 
-    def on_mouse_motion(self, x, y, dx, dy) -> bool:
-        for btn in self._tab_buttons:
-            btn.on_mouse_motion(x, y, dx, dy)
-        if self._active_tab:
-            self._tabs[self._active_tab].on_mouse_motion(x, y, dx, dy)
-        return False
+    def on_mouse_release(self, x, y, button, modifiers) -> bool:
+        if self.input_handler.selected_eid is None:
+            return False
+        return super().on_mouse_release(x, y, button, modifiers)
 
     def on_resize(self, width, height) -> None:
-        super().on_resize(width, height)
-        # reposition tab buttons
-        tab_x = self.x
-        tab_y = self.y + self.height - self.tab_height
-        for btn in self._tab_buttons:
-            btn.x = tab_x
-            btn.y = tab_y
-            btn._on_reposition()
-            tab_x += btn.width
+        self._parent_width = width
+        self._parent_height = height
+        if self._built_for_eid is not None:
+            self._build(self._built_for_eid)
+        self._reposition_to_corner()
+
+
+
+
+
+class ActionBarWidget(PanelWidget):
+    """Shows actions for the selected entity"""
+    def __init__(self, world: World, input_handler, parent_width: int = 800, parent_height: int = 600) -> None:
+        super().__init__(x=0, y=0, width=0, height=40,
+                         layout="horizontal", gap=4, padding=4, alpha=0)
+        self.world = world
+        self.input_handler = input_handler
+        self._built_for_eid: int | None = None
+        self._parent_width = parent_width
+        self._parent_height = parent_height
+
+    def _default_actions(self, eid: int) -> list[tuple[str, Callable]]:
+        return [
+            ("[F] Follow", lambda: self.input_handler.set_follower(eid)),
+            ("[I] Inspect", lambda: self.input_handler.open_inspector(eid)),
+        ]
+
+    def _build(self, eid: int) -> None:
+        self.children.clear()
+        self._built_for_eid = eid
+
+        actions = self._default_actions(eid)
+
+        # TODO: add script actions here
+        # script = self.world.get_component(ScriptComponent).get(eid)
+        # if script:
+        #     actions += script.actions
+
+        for text, action in actions:
+            self.add(TextButtonWidget(
+                x=0, y=0, width=90, height=30,
+                text=text,
+                font_size=10,
+                action=action
+            ))
+
+        # auto-resize width
+        total_width = self.padding * 2
+        for child in self.children:
+            total_width += child.width + self.gap
+        self.width = total_width
+        self._on_reposition()
+        self._apply_layout()
+        self._reposition()
+
+    def _reposition(self) -> None:
+        self.x = 210  # right of selection panel
+        self.y = 10
+        self._on_reposition()
+
+    def draw(self, batch: pyglet.graphics.Batch) -> None:
+        eid = self.input_handler.selected_eid
+        if eid is None:
+            return
+        if eid != self._built_for_eid:
+            self._build(eid)
+        super().draw(batch)
+
+    def on_mouse_press(self, x, y, button, modifiers) -> bool:
+        if self.input_handler.selected_eid is None:
+            return False
+        return super().on_mouse_press(x, y, button, modifiers)
+
+    def on_mouse_release(self, x, y, button, modifiers) -> bool:
+        if self.input_handler.selected_eid is None:
+            return False
+        return super().on_mouse_release(x, y, button, modifiers)
+
+    def on_resize(self, width, height) -> None:
+        self._parent_width = width
+        self._parent_height = height
+        if self._built_for_eid is not None:
+            self._build(self._built_for_eid)
+        self._reposition()

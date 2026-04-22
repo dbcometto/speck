@@ -20,7 +20,7 @@ class ViewportWindow(SpeckWindow):
         """Establish the Pyglet renderer"""
         super().__init__(world, windows, width, height) # creates window, hud, camera, and input handler
         self.camera = Camera(width, height)
-        self.input_handler = InputHandler(world, self.camera)
+        self.input_handler = InputHandler(world, self.camera, self.windows)
         self.hud = HUD(world, self.camera, self.input_handler, width, height)
         self._last_draw = time.perf_counter()
         self.windows.append(self.window)     
@@ -28,9 +28,9 @@ class ViewportWindow(SpeckWindow):
         # Pyglet State
         pyglet.gl.glClearColor(0.05, 0.05, 0.05, 1.0)
         self.window.push_handlers(self)
-        self.window.push_handlers(self.hud)
         self.window.push_handlers(self.camera)
         self.window.push_handlers(self.input_handler)
+        self.window.push_handlers(self.hud)
     
     def on_draw(self):
         """Handler for draw event"""
