@@ -9,7 +9,7 @@ class RenderType(IntEnum):
 
 class RenderData(Component):
     """Contains rendering data"""
-    def __init__(self, render_type: int = RenderType.POINT, color = "#FFFFFF", radius = 1.0):
+    def __init__(self, render_type: int = RenderType.POINT, color: str = "#FFFFFF", radius: float | None = None):
         """Render this entity"""
         self.render_type = render_type
         self.color = color
