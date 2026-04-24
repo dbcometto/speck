@@ -4,12 +4,12 @@ import pyglet
 from typing import Callable
 from enum import Enum
 
-from ....core import World
-from ....components.dynamics import Position
-from ....components.rendering import RenderData
-from .camera import Camera
-from ....utils import _hex_to_rgb
-from ....config import SELECTED_COLOR, GRAY_COLOR, OTHER_COLOR, DARK_GRAY_COLOR, ZOOM_FACTOR, MINIMAP_FOCUS_COLOR
+from ...core import World
+from ...components.dynamics import Position
+from ...components.rendering import RenderData
+from .viewport.camera import Camera
+from ...utils import _hex_to_rgb
+from ...config import SELECTED_COLOR, GRAY_COLOR, OTHER_COLOR, DARK_GRAY_COLOR, ZOOM_FACTOR, MINIMAP_FOCUS_COLOR
 
 
 
@@ -926,5 +926,183 @@ class EntityListPanelWidget(PanelWidget):
 
 
 
+
+
+
+class ComponentInspectorWidget(Widget):
+    def __init__(self, x, y, width, height, world, eid,
+                 anchor_top=False, anchor_right=False,
+                 anchor_bottom=False, anchor_left=False,
+                 max_col_width = 150, min_col_width = 10,
+                 order: list[type] | None = None):
+        super().__init__(x, y, width, height, anchor_top, anchor_right, anchor_bottom, anchor_left)
+        self.world = world
+        self.eid = eid
+        self._scroll_offset = 0
+        self._row_height = 18
+        self._char_width = 7
+        self._padding = 4
+        self._scrollbar_width = 8
+        self._labels = []
+        self.max_col_width = max_col_width
+        self.min_col_width = min_col_width
+        self.order = order
+
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y) -> bool:
+        if self.hit_test(x, y):
+            self._scroll_offset = max(0, self._scroll_offset - int(scroll_y))
+            return True
+        return False
+
+    def _format_field(self, comp, field, value) -> str:
+        unit = getattr(comp.__class__, 'units', {}).get(field, "")
+        if isinstance(value, float):
+            return f"{field}: {value:.3f}{unit}"
+        return f"{field}: {value}"
+
+    def _wrap_text(self, text: str, max_width: int) -> list[str]:
+        max_chars = max(1, max_width // self._char_width)
+        if len(text) <= max_chars:
+            return [text]
+        lines = []
+        while text:
+            lines.append(text[:max_chars])
+            text = "  " + text[max_chars:]
+            if len(text) <= max_chars:
+                lines.append(text)
+                break
+        return lines
+
+    def _build_blocks(self) -> list:
+        blocks = []
+        
+        # build in specified order first
+        if self.order:
+            for comp_type in self.order:
+                store = self.world.components.get(comp_type, {})
+                if self.eid in store:
+                    comp = store[self.eid]
+                    block = [(comp_type.__name__, OTHER_COLOR)]
+                    for field, value in comp.__dict__.items():
+                        text = f"  {self._format_field(comp, field, value)}"
+                        for line in self._wrap_text(text, self.max_col_width):
+                            block.append((line, GRAY_COLOR))
+                    blocks.append(block)
+
+        # then any remaining components not in order
+        for comp_type, store in self.world.components.items():
+            if comp_type in (self.order or []):
+                continue
+            if self.eid in store:
+                comp = store[self.eid]
+                block = [(comp_type.__name__, OTHER_COLOR)]
+                for field, value in comp.__dict__.items():
+                    text = f"  {self._format_field(comp, field, value)}"
+                    for line in self._wrap_text(text, self.max_col_width):
+                        block.append((line, GRAY_COLOR))
+                blocks.append(block)
+
+        return blocks
+
+    def _arrange_blocks(self, blocks, content_width) -> tuple[list, int]:
+        if not blocks:
+            return [], content_width
+
+        max_field_width = max(
+            max(len(line[0]) * self._char_width + self._padding for line in block)
+            for block in blocks
+        )
+        clamped_width = max(self.min_col_width,
+                            min(max_field_width, self.max_col_width))
+        cols = max(1, content_width // clamped_width)
+        col_width = content_width // cols
+
+        # fill columns top to bottom in order
+        total_lines = sum(len(block) for block in blocks)
+        target_height = (total_lines + cols - 1) // cols
+
+        col_blocks = [[] for _ in range(cols)]
+        total_lines = sum(len(block) for block in blocks)
+        target_height = (total_lines + cols - 1) // cols
+
+        current_col = 0
+        current_height = 0
+
+        for block in blocks:
+            if current_height + len(block) > target_height and current_col < cols - 1:
+                current_col += 1
+                current_height = 0
+            col_blocks[current_col].append(block)
+            current_height += len(block)
+
+        # flatten columns to lines
+        col_lines = []
+        for col in col_blocks:
+            lines = []
+            for block in col:
+                for line in block:
+                    lines.append(line)
+            col_lines.append(lines)
+
+        max_height = max(len(c) for c in col_lines) if col_lines else 0
+        rows = []
+        for row_idx in range(max_height):
+            row = []
+            for col_idx in range(cols):
+                if row_idx < len(col_lines[col_idx]):
+                    row.append(col_lines[col_idx][row_idx])
+                else:
+                    row.append(("", GRAY_COLOR))
+            rows.append(row)
+
+        return rows, col_width
+
+    def draw(self, batch: pyglet.graphics.Batch) -> None:
+        self._labels = []
+        content_width = self.width - self._scrollbar_width - self._padding
+        blocks = self._build_blocks()
+        rows, col_width = self._arrange_blocks(blocks, content_width)
+
+        total_rows = len(rows)
+        visible_rows = self.height // self._row_height
+        max_offset = max(0, total_rows - visible_rows)
+        self._scroll_offset = min(self._scroll_offset, max_offset)
+
+        y = self.y + self.height
+        for i in range(self._scroll_offset, min(self._scroll_offset + visible_rows, total_rows)):
+            y -= self._row_height
+            for j, (text, color) in enumerate(rows[i]):
+                if text:
+                    self._labels.append(pyglet.text.Label(
+                        text=text,
+                        x=self.x + self._padding + j * col_width, y=y,
+                        font_name="Consolas", font_size=10,
+                        color=_hex_to_rgb(color),
+                        batch=batch
+                    ))
+
+        if total_rows > visible_rows:
+            scrollbar_x = self.x + self.width - self._scrollbar_width
+            track_height = self.height
+            thumb_height = max(20, track_height * visible_rows // total_rows)
+            thumb_y = self.y + track_height - int(
+                (track_height - thumb_height) * self._scroll_offset / max(1, max_offset)
+            ) - thumb_height
+
+            self._labels.append(pyglet.shapes.Rectangle(
+                x=scrollbar_x, y=self.y,
+                width=self._scrollbar_width, height=track_height,
+                color=_hex_to_rgb(DARK_GRAY_COLOR),
+                batch=batch
+            ))
+            self._labels.append(pyglet.shapes.Rectangle(
+                x=scrollbar_x, y=thumb_y,
+                width=self._scrollbar_width, height=thumb_height,
+                color=_hex_to_rgb(GRAY_COLOR),
+                batch=batch
+            ))
+
+    def _on_reposition(self) -> None:
+        self._labels = []
 
 

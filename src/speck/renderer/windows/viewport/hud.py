@@ -7,7 +7,7 @@ from .input_handler import InputHandler
 from ....config import SELECTED_COLOR, OTHER_COLOR, DARK_GRAY_COLOR, GRAY_COLOR, KEYBINDS
 from ....config import SIDEBAR_ICON_WIDTH, SIDEBAR_PANEL_WIDTH, BOTTOM_BAR_HEIGHT, MINIMAP_WIDTH, MINIMAP_HEIGHT, TOP_BAR_HEIGHT
 from ....utils import _hex_to_rgb
-from .widget import Widget, TextWidget, TextButtonWidget, PanelWidget, SelectionPanelWidget, ActionBarWidget, MinimapWidget, IconStripWidget, EntityListPanelWidget
+from ..widget import Widget, TextWidget, TextButtonWidget, PanelWidget, SelectionPanelWidget, ActionBarWidget, MinimapWidget, IconStripWidget, EntityListPanelWidget
 
 class HUD():
     """The HUD"""
