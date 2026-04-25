@@ -1,7 +1,7 @@
 """Systems for processing assemblies and parts"""
 from ..core import World
 from ..components.assemblies import Assembly, PartIdentity, ScriptBehavior
-from ..components.assemblies import ThrusterBehavior, RCSBehavior
+from ..components.assemblies import ThrusterBehavior, AttitudeBehavior
 from ..components.dynamics import Acceleration, AngularAcceleration
 from .system import System
 
@@ -15,7 +15,7 @@ class AssemblySystem(System):
         thruster_behaviors = world.get_component(ThrusterBehavior)
         accelerations = world.get_component(Acceleration)
         angular_accelerations = world.get_component(AngularAcceleration)
-        rcs_behaviors = world.get_component(RCSBehavior)
+        attitude_behaviors = world.get_component(AttitudeBehavior)
 
         for assembly_eid, assembly in assemblies.items():
 
@@ -58,10 +58,10 @@ class AssemblySystem(System):
 
             # Run RCS behaviors
             for part_eid in assembly.parts:
-                if part_eid in rcs_behaviors and part_eid in part_identities:
-                    rb = rcs_behaviors[part_eid]
+                if part_eid in attitude_behaviors and part_eid in part_identities:
+                    ab = attitude_behaviors[part_eid]
                     pi = part_identities[part_eid]
-                    control = pi.port_values.get(rb.attitude_port)
+                    control = pi.port_values.get(ab.control_port)
                     if control is not None and assembly_eid in angular_accelerations:
                         ang_acc = angular_accelerations[assembly_eid]
-                        ang_acc.z += control * rb.max_torque
+                        ang_acc.z += control * ab.max_torque

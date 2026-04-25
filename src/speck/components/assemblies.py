@@ -29,10 +29,14 @@ class PORT_TYPE(Enum):
     GRANULAR = "granular"
     FLUID = "fluid"
 
+class PORT_DIRECTION(Enum):
+    IN = "in"
+    OUT = "out"
+
 class PartIdentity(Component):
     """Metadata for a part in an assembly"""
     def __init__(self, assembly_eid: int | None = None, name: str = "", 
-                 ports: list[tuple[str, PORT_TYPE]] | None = None) -> None:
+                 ports: list[tuple[str, PORT_TYPE, PORT_DIRECTION]] | None = None) -> None:
         self.assembly_eid = assembly_eid # of assembly
         self.name = name
         self.ports = ports if ports is not None else []
@@ -42,34 +46,44 @@ class PartIdentity(Component):
 # Scripts
 
 class ScriptBehavior(Component):
-    """Assigns a behavior scriptto a part"""
+    """Assigns a behavior script to a part"""
     def __init__(self, script: Script, port_mapping: dict[str, str] | None = None) -> None:
         """Assigns a behavior script to a part"""
         self.script = script
         self.port_mapping = port_mapping if port_mapping is not None else {} # maps script port name -> real part port name
 
 
-
-
 # Actuator Parts
 
 class ThrusterBehavior(Component): # TODO: make able to choose axis
     """Assign a thruster that produces thrust to a part"""
-    def __init__(self, control_port: str, fuel_port: str, max_thrust: float = 1.0):
+    def __init__(self, control_port: str, fuel_storage_key: str, max_thrust: float = 1.0, axis = "+x"):
+        """Assign a thruster that produces thrust to a part, axis is FLU"""
         self.control_port = control_port
-        self.fuel_port = fuel_port
+        self.fuel_storage_key = fuel_storage_key
         self.max_thrust = max_thrust
-        # self.throttle = 0.0
+        self.axis = axis
 
-class RCSBehavior(Component): # TODO: translation # TODO: documentation for user on ports
-    """Abstracted attitude control system - applies torque and translation directly"""
-    def __init__(self, attitude_port: str, max_torque: float = 1.0) -> None:
-        self.attitude_port = attitude_port
+class AttitudeBehavior(Component):
+    """Abstracted attitude control system - applies torque directly"""
+    def __init__(self, control_port: str, max_torque: float = 1.0, axis = "+z") -> None:
+        self.control_port = control_port
         self.max_torque = max_torque
-        # self.torque_z = 0.0
-        # TODO: 3D
+        self.axis = axis
 
 
 
 # Resource Parts
+
+class ResourceBehavior(Component):
+    def __init__(self, port_mapping: dict[str, str] | None = None, 
+                 rates: dict[str, tuple[PORT_TYPE, float | None]] | None = None, 
+                 capacities: dict[str, tuple[PORT_TYPE, float | None]] | None = None) -> None:
+        """Give a part onboard storage connected to ports"""
+
+        self.port_mapping = port_mapping if port_mapping is not None else {}    # storage_key: port_key
+        self.rates = rates if rates is not None else {}                         # storage_key: type, rate
+        self.capacities = capacities if capacities is not None else {}          # storage_key: type, max
+        
+        self.stored: dict[str, float] = {k: 0.0 if self.capacities[k][1] is not None else None for k in self.capacities} # current amount stored
 

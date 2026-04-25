@@ -11,7 +11,7 @@ from enum import Enum
 
 from ...core import World
 from ...components.dynamics import Position
-from ...components.assemblies import Assembly
+from ...components.assemblies import Assembly, PORT_TYPE, PORT_DIRECTION
 from ...components.rendering import RenderData
 from ...utils import _hex_to_rgb
 from ...config import SELECTED_COLOR, GRAY_COLOR, OTHER_COLOR, DARK_GRAY_COLOR, ZOOM_FACTOR, MINIMAP_FOCUS_COLOR
@@ -1162,10 +1162,13 @@ class _FlowNode(Widget):
         return self.x <= wx <= self.x + self.width and self.y <= wy <= self.y + self.height
 
     def port_world_pos(self, port):
+        from ...components.assemblies import PORT_DIRECTION
         i      = self.ports.index(port)
         body_h = max(len(self.ports), 1) * self.ROW_H
         ly     = body_h - (i + 0.5) * self.ROW_H
-        lx     = 0.0 if self.flipped else float(self.width)
+        is_out = port[2] == PORT_DIRECTION.OUT
+        on_right = is_out ^ self.flipped   # XOR — flip inverts the default
+        lx = float(self.width) if on_right else 0.0
         return self.x + lx, self.y + ly
 
     def port_at(self, wx, wy, zoom):
@@ -1204,18 +1207,20 @@ class _FlowNode(Widget):
             btn.draw(batch)
 
         for port in self.ports:
-            px, py = to_screen(*self.port_world_pos(port))
-            pr = self.PR * zoom
+            px, py   = to_screen(*self.port_world_pos(port))
+            pr       = self.PR * zoom
+            on_right = (port[2] == PORT_DIRECTION.OUT) ^ self.flipped
+            color    = SELECTED_COLOR if port[2] == PORT_DIRECTION.OUT else OTHER_COLOR
+            label_x  = px - (pr + 2) if on_right else px + (pr + 2)
+            anchor   = "right" if on_right else "left"
             shapes += [
-                pyglet.shapes.Circle(px, py, pr, color=_hex_to_rgb(OTHER_COLOR), batch=batch),
+                pyglet.shapes.Circle(px, py, pr, color=_hex_to_rgb(color), batch=batch),
                 pyglet.text.Label(
                     port[0],
-                    x=px + (pr + 2 if self.flipped else -pr - 2),
-                    y=py - fsz // 2,
+                    x=label_x, y=py - fsz // 2,
                     font_name="Consolas", font_size=max(6, fsz - 1),
-                    color=_hex_to_rgb(OTHER_COLOR),
-                    anchor_x="left" if self.flipped else "right",
-                    batch=batch
+                    color=_hex_to_rgb(color),
+                    anchor_x=anchor, batch=batch
                 ),
             ]
 
@@ -1328,6 +1333,9 @@ class FlowgraphCanvasWidget(Widget):
         layouts[assembly_eid].positions = {n.part_eid: (n.x, n.y) for n in self.nodes}
         layouts[assembly_eid].flipped   = {n.part_eid: n.flipped for n in self.nodes}
 
+    def _port_direction(self, node, port):
+        on_right = (port[2] == PORT_DIRECTION.OUT) ^ node.flipped
+        return 1 if on_right else -1
 
     def _bezier(self, p0, p1, d0, d1, color, batch):
         x0, y0 = p0
@@ -1357,15 +1365,14 @@ class FlowgraphCanvasWidget(Widget):
         for a, pa, b, pb in self.edges:
             p0 = self._to_screen(*a.port_world_pos(pa))
             p1 = self._to_screen(*b.port_world_pos(pb))
-            d0 = -1 if a.flipped else 1
-            d1 = -1 if b.flipped else 1
-            self._bezier(p0, p1, d0, d1, _hex_to_rgb(OTHER_COLOR), batch)
+            self._bezier(p0, p1, self._port_direction(a, pa), self._port_direction(b, pb),
+                        _hex_to_rgb(OTHER_COLOR), batch)
 
         if self._state == "draw_edge" and self._edge_src and self._edge_cur:
             p0 = self._to_screen(*self._edge_src.port_world_pos(self._edge_port))
             p1 = self._to_screen(*self._edge_cur)
-            d0 = -1 if self._edge_src.flipped else 1
-            self._bezier(p0, p1, d0, 1, _hex_to_rgb(SELECTED_COLOR), batch)
+            self._bezier(p0, p1, self._port_direction(self._edge_src, self._edge_port), 1,
+                        _hex_to_rgb(SELECTED_COLOR), batch)
 
         for node in self.nodes:
             node.draw(batch, self._to_screen, self._cam_zoom,
