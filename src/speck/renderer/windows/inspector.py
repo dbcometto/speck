@@ -5,7 +5,7 @@ from ..windows import SpeckWindow
 from ...core import World
 from ...utils import _hex_to_rgb
 from ...config import SELECTED_COLOR, OTHER_COLOR, GRAY_COLOR, DARK_GRAY_COLOR, MAX_INSPECTOR_COL_WIDTH, MIN_INSPECTOR_COL_WIDTH
-from .widget import ComponentInspectorWidget, TextWidget
+from .widgets import ComponentInspectorWidget, TextWidget
 from ...components.functional import Identity, Surface, SurfacePosition
 from ...components.dynamics import Position,Velocity,Acceleration,Attitude,AngularVelocity,AngularAcceleration,Mass
 from ...components.assemblies import Assembly

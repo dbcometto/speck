@@ -6,7 +6,6 @@ from typing import Callable
 from ....core import World
 from ....components.dynamics import Position
 from .camera import Camera
-from ....renderer.windows.inspector import InspectorWindow
 from ....config import SELECTION_TOLERANCE, KEYBINDS, ZOOM_FACTOR, CAMERA_SENSITIVITY, TIMEWARP_PRESETS
 
 class InputHandler():
@@ -36,6 +35,7 @@ class InputHandler():
 
     def open_inspector(self, eid: int| None) -> None:
         """Open an inspector window for an entity"""
+        from ....renderer.windows.inspector import InspectorWindow
         # check if already open
         if eid is not None:
             for w in self.windows:
@@ -44,6 +44,18 @@ class InputHandler():
                     return
             
             new_window = InspectorWindow(self.world, self.windows, eid) # adds itself to the list of windows
+
+    def open_graph(self, eid: int| None) -> None:
+        """Open an assembly graph window for an entity"""
+        from ....renderer.windows.flowgraph import FlowgraphWindow
+        # check if already open
+        if eid is not None:
+            for w in self.windows:
+                if isinstance(w, FlowgraphWindow) and w.assembly_eid == eid:
+                    w.window.activate()
+                    return
+            
+            new_window = FlowgraphWindow(self.world, self.windows, eid) # adds itself to the list of windows
 
 
 
@@ -191,6 +203,9 @@ class InputHandler():
             self.on_minimap_follow(self.selected_eid)
             handled = True
         
+        if symbol in KEYBINDS["open_graph"]:
+            self.open_graph(self.selected_eid)
+            handled = True
 
 
         # Time

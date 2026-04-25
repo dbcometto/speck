@@ -31,6 +31,8 @@ KEYBINDS = {
     "deselect": [pyglet.window.key.ESCAPE],
     "inspect": [pyglet.window.key.I],
     "focus_minimap": [pyglet.window.key.M],
+    "open_graph": [pyglet.window.key.G],
+    "entity_list": [pyglet.window.key.E], # TODO
 
     # Time controls
     "pause": [pyglet.window.key.SPACE],

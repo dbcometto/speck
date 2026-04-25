@@ -14,6 +14,12 @@ class Assembly(Component):
         self.parts: list[int] = []  # child eids
         self.edges: list[tuple[int, str, int, str]] = [] # (from_eid, from_port, to_eid, to_port) 
 
+class FlowgraphLayout(Component):
+    """Stores UI node positions for the flowgraph editor. Not simulation data."""
+    def __init__(self):
+        self.positions: dict[int, tuple[float, float]] = {}  # part_eid -> (wx, wy)
+        self.flipped:   dict[int, bool] = {}                 # part_eid -> flipped
+
 # Part Metadata
 
 class PORT_TYPE(Enum):
@@ -31,8 +37,6 @@ class PartIdentity(Component):
         self.name = name
         self.ports = ports if ports is not None else []
         self.port_values: dict[str, any] = {p[0]: None for p in self.ports}  # port_name -> current value
-        
-
 
 
 # Scripts
