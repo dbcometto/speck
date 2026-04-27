@@ -2,7 +2,7 @@
 import math
 
 from .system import System
-from ..components.dynamics import Position, Velocity, Acceleration
+from ..components.dynamics import Position, Velocity, Acceleration, Attitude, AngularVelocity, AngularAcceleration
 from ..components.dynamics import Mass, GravitySource, GravityConsumer
 from ..core.world import World
 
@@ -25,19 +25,70 @@ class MovementSystem(System):
             positions[eid].x += velocities[eid].x * dt
             positions[eid].y += velocities[eid].y * dt
             positions[eid].z += velocities[eid].z * dt
-
-
-
+        
 class ResetAccelerationSystem(System):
-    """Acts on acceleration components"""
+    """Reset the accelerations to 0"""
     def update(self, world: World, dt: float):
-        """Resets accelerations to zero"""
         accelerations = world.get_component(Acceleration)
-
         for eid in accelerations.keys():
             accelerations[eid].x = 0.0
             accelerations[eid].y = 0.0
             accelerations[eid].z = 0.0
+
+
+
+
+
+class AttitudeSystem(System):
+    """Integrates angular acceleration into angular velocity and attitude"""
+    def update(self, world: World, dt: float):
+        attitudes = world.get_component(Attitude)
+        angular_velocities = world.get_component(AngularVelocity)
+        angular_accelerations = world.get_component(AngularAcceleration)
+
+        # integrate angular acceleration into angular velocity
+        for eid in angular_velocities.keys() & angular_accelerations.keys():
+            angular_velocities[eid].x += angular_accelerations[eid].x * dt
+            angular_velocities[eid].y += angular_accelerations[eid].y * dt
+            angular_velocities[eid].z += angular_accelerations[eid].z * dt
+
+        # integrate angular velocity into attitude quaternion
+        for eid in attitudes.keys() & angular_velocities.keys():
+            q = attitudes[eid]
+            w = angular_velocities[eid]
+
+            # Apply exp map to get change in attitude from quaternion and euler integrate
+            # q_dot = 0.5 * q (x) w_pure
+            # w_pure = (0, wx, wy, wz)
+            q_dot_w = 0.5 * (-q.x*w.x - q.y*w.y - q.z*w.z)
+            q_dot_x = 0.5 * ( q.w*w.x + q.y*w.z - q.z*w.y)
+            q_dot_y = 0.5 * ( q.w*w.y - q.x*w.z + q.z*w.x)
+            q_dot_z = 0.5 * ( q.w*w.z + q.x*w.y - q.y*w.x)
+
+            q.w += q_dot_w * dt
+            q.x += q_dot_x * dt
+            q.y += q_dot_y * dt
+            q.z += q_dot_z * dt
+
+            # normalize back onto SO(3) to maintain manifold constraint
+            norm = (q.w**2 + q.x**2 + q.y**2 + q.z**2) ** 0.5
+            if norm > 0:
+                q.w /= norm
+                q.x /= norm
+                q.y /= norm
+                q.z /= norm
+
+        
+        
+class ResetAngularAccelerationSystem(System):
+    """Reset the accelerations to 0"""
+    def update(self, world: World, dt: float):
+        angular_accelerations = world.get_component(AngularAcceleration)
+        for eid in angular_accelerations.keys():
+            angular_accelerations[eid].x = 0.0
+            angular_accelerations[eid].y = 0.0
+            angular_accelerations[eid].z = 0.0
+
 
 
 

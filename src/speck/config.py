@@ -31,6 +31,8 @@ KEYBINDS = {
     "deselect": [pyglet.window.key.ESCAPE],
     "inspect": [pyglet.window.key.I],
     "focus_minimap": [pyglet.window.key.M],
+    "open_graph": [pyglet.window.key.G],
+    "entity_list": [pyglet.window.key.E], # TODO
 
     # Time controls
     "pause": [pyglet.window.key.SPACE],
@@ -53,6 +55,9 @@ BOTTOM_BAR_HEIGHT = 80
 MINIMAP_WIDTH = 220
 MINIMAP_HEIGHT = 200
 TOP_BAR_HEIGHT = 30
+
+MIN_INSPECTOR_COL_WIDTH = 80
+MAX_INSPECTOR_COL_WIDTH = 150
 
 
 # Rendering

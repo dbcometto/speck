@@ -2,7 +2,7 @@
 import math
 
 from speck.core import World
-from speck.entities import generate_body, generate_moveable_agent
+from speck.entities import generate_body, generate_moveable_agent, generate_agent_with_thruster, generate_agent_with_rcs_and_thruster
 
 from speck.config import G
 
@@ -44,3 +44,13 @@ def generate_scene_2smallbody(world: World, x1 = 0, m1 = 1e22, m2 = 1e20, r=500.
     # Add an agent in a circular orbit around the second body
     va = math.sqrt(G*m2/ra)
     generate_moveable_agent(world, x = x1+r+ra, vy = v2+va, mass=agentmass)
+
+
+
+def generate_scene_emptythruster(world: World):
+    """Populate the world with one moveable agent"""
+    generate_agent_with_thruster(world, mass = 1, max_thrust= 1)
+
+def generate_scene_emptythrusterrcs(world: World):
+    """Populate the world with one moveable agent"""
+    generate_agent_with_rcs_and_thruster(world, mass = 1, max_thrust= 1, max_torque = 1)

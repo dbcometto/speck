@@ -4,7 +4,7 @@ from typing import Self
 from .component import Component
 
 
-# Movement 
+# Movement  (linear)
 
 class Position(Component):
     """A position component"""
@@ -32,6 +32,33 @@ class Acceleration(Component):
 
     def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0) -> None:
         """Give an entity acceleration in km/s^2"""
+        self.x = x
+        self.y = y
+        self.z = z
+
+
+
+
+# Attitude
+
+class Attitude(Component):
+    """Attitude as a quaternion"""
+    def __init__(self, w=1.0, x=0.0, y=0.0, z=0.0) -> None:
+        self.w = w 
+        self.x = x
+        self.y = y
+        self.z = z
+
+class AngularVelocity(Component):
+    """Angular velocity, body frame, rad/s"""
+    def __init__(self, x=0.0, y=0.0, z=0.0) -> None:
+        self.x = x
+        self.y = y
+        self.z = z
+
+class AngularAcceleration(Component):
+    """Angular acceleration, body frame, rad/s^2"""
+    def __init__(self, x=0.0, y=0.0, z=0.0) -> None:
         self.x = x
         self.y = y
         self.z = z

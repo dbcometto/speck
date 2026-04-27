@@ -1,15 +1,20 @@
 """A collection of widgets"""
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .viewport.camera import Camera
+
 from abc import ABC, abstractmethod
 import pyglet
 from typing import Callable
 from enum import Enum
 
-from ....core import World
-from ....components.dynamics import Position
-from ....components.rendering import RenderData
-from .camera import Camera
-from ....utils import _hex_to_rgb
-from ....config import SELECTED_COLOR, GRAY_COLOR, OTHER_COLOR, DARK_GRAY_COLOR, ZOOM_FACTOR, MINIMAP_FOCUS_COLOR
+from ...core import World
+from ...components.dynamics import Position
+from ...components.assemblies import Assembly, PORT_TYPE, PORT_DIRECTION
+from ...components.rendering import RenderData
+from ...utils import _hex_to_rgb
+from ...config import SELECTED_COLOR, GRAY_COLOR, OTHER_COLOR, DARK_GRAY_COLOR, ZOOM_FACTOR, MINIMAP_FOCUS_COLOR
 
 
 
@@ -448,11 +453,16 @@ class ActionBarWidget(PanelWidget):
         self._parent_height = parent_height
 
     def _default_actions(self, eid: int) -> list[tuple[str, Callable]]:
-        return [
+        actions = [
             ("[f] Follow", lambda: self.input_handler.set_follower(eid)),
             ("[i] Inspect", lambda: self.input_handler.open_inspector(eid)),
             ("[m] Minimap", lambda: self.on_minimap_follow(eid)),
         ]
+
+        if eid in self.world.get_component(Assembly):
+            actions.append(("[g] Graph", lambda: self.input_handler.open_graph(eid)))
+
+        return actions
 
     def _build(self, eid: int) -> None:
         self.children.clear()
@@ -527,6 +537,8 @@ class MinimapWidget(Widget):
                  anchor_bottom: bool = False, anchor_left: bool = False,
                  padding = 10, border = 3,
                  alpha = 1):
+        from .viewport.camera import Camera
+
         super().__init__(x, y, width, height, anchor_top, anchor_right, anchor_bottom, anchor_left)
         self.world = world
         self.main_camera = main_camera
@@ -923,6 +935,557 @@ class EntityListPanelWidget(PanelWidget):
             self._scroll_offset = max(0, min(max_offset, self._scroll_offset - int(scroll_y)))
             return True
         return False
+
+
+
+
+
+
+class ComponentInspectorWidget(Widget):
+    def __init__(self, x, y, width, height, world, eid,
+                 anchor_top=False, anchor_right=False,
+                 anchor_bottom=False, anchor_left=False,
+                 max_col_width = 150, min_col_width = 10,
+                 order: list[type] | None = None):
+        super().__init__(x, y, width, height, anchor_top, anchor_right, anchor_bottom, anchor_left)
+        self.world = world
+        self.eid = eid
+        self._scroll_offset = 0
+        self._row_height = 18
+        self._char_width = 7
+        self._padding = 4
+        self._scrollbar_width = 8
+        self._labels = []
+        self.max_col_width = max_col_width
+        self.min_col_width = min_col_width
+        self.order = order
+
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y) -> bool:
+        if self.hit_test(x, y):
+            self._scroll_offset = max(0, self._scroll_offset - int(scroll_y))
+            return True
+        return False
+
+    def _format_field(self, comp, field, value) -> str:
+        unit = getattr(comp.__class__, 'units', {}).get(field, "")
+        if isinstance(value, float):
+            return f"{field}: {value:.3f}{unit}"
+        return f"{field}: {value}"
+
+    def _wrap_text(self, text: str, max_width: int) -> list[str]:
+        max_chars = max(1, max_width // self._char_width)
+        if len(text) <= max_chars:
+            return [text]
+        lines = []
+        while text:
+            lines.append(text[:max_chars])
+            text = "  " + text[max_chars:]
+            if len(text) <= max_chars:
+                lines.append(text)
+                break
+        return lines
+
+    def _build_blocks(self) -> list:
+        blocks = []
+        
+        # build in specified order first
+        if self.order:
+            for comp_type in self.order:
+                store = self.world.components.get(comp_type, {})
+                if self.eid in store:
+                    comp = store[self.eid]
+                    block = [(comp_type.__name__, OTHER_COLOR)]
+                    for field, value in comp.__dict__.items():
+                        text = f"  {self._format_field(comp, field, value)}"
+                        for line in self._wrap_text(text, self.max_col_width):
+                            block.append((line, GRAY_COLOR))
+                    blocks.append(block)
+
+        # then any remaining components not in order
+        for comp_type, store in self.world.components.items():
+            if comp_type in (self.order or []):
+                continue
+            if self.eid in store:
+                comp = store[self.eid]
+                block = [(comp_type.__name__, OTHER_COLOR)]
+                for field, value in comp.__dict__.items():
+                    text = f"  {self._format_field(comp, field, value)}"
+                    for line in self._wrap_text(text, self.max_col_width):
+                        block.append((line, GRAY_COLOR))
+                blocks.append(block)
+
+        return blocks
+
+    def _arrange_blocks(self, blocks, content_width) -> tuple[list, int]:
+        if not blocks:
+            return [], content_width
+
+        max_field_width = max(
+            max(len(line[0]) * self._char_width + self._padding for line in block)
+            for block in blocks
+        )
+        clamped_width = max(self.min_col_width,
+                            min(max_field_width, self.max_col_width))
+        cols = max(1, content_width // clamped_width)
+        col_width = content_width // cols
+
+        # fill columns top to bottom in order
+        total_lines = sum(len(block) for block in blocks)
+        target_height = (total_lines + cols - 1) // cols
+
+        col_blocks = [[] for _ in range(cols)]
+        total_lines = sum(len(block) for block in blocks)
+        target_height = (total_lines + cols - 1) // cols
+
+        current_col = 0
+        current_height = 0
+
+        for block in blocks:
+            if current_height + len(block) > target_height and current_col < cols - 1:
+                current_col += 1
+                current_height = 0
+            col_blocks[current_col].append(block)
+            current_height += len(block)
+
+        # flatten columns to lines
+        col_lines = []
+        for col in col_blocks:
+            lines = []
+            for block in col:
+                for line in block:
+                    lines.append(line)
+            col_lines.append(lines)
+
+        max_height = max(len(c) for c in col_lines) if col_lines else 0
+        rows = []
+        for row_idx in range(max_height):
+            row = []
+            for col_idx in range(cols):
+                if row_idx < len(col_lines[col_idx]):
+                    row.append(col_lines[col_idx][row_idx])
+                else:
+                    row.append(("", GRAY_COLOR))
+            rows.append(row)
+
+        return rows, col_width
+
+    def draw(self, batch: pyglet.graphics.Batch) -> None:
+        self._labels = []
+        content_width = self.width - self._scrollbar_width - self._padding
+        blocks = self._build_blocks()
+        rows, col_width = self._arrange_blocks(blocks, content_width)
+
+        total_rows = len(rows)
+        visible_rows = self.height // self._row_height
+        max_offset = max(0, total_rows - visible_rows)
+        self._scroll_offset = min(self._scroll_offset, max_offset)
+
+        y = self.y + self.height
+        for i in range(self._scroll_offset, min(self._scroll_offset + visible_rows, total_rows)):
+            y -= self._row_height
+            for j, (text, color) in enumerate(rows[i]):
+                if text:
+                    self._labels.append(pyglet.text.Label(
+                        text=text,
+                        x=self.x + self._padding + j * col_width, y=y,
+                        font_name="Consolas", font_size=10,
+                        color=_hex_to_rgb(color),
+                        batch=batch
+                    ))
+
+        if total_rows > visible_rows:
+            scrollbar_x = self.x + self.width - self._scrollbar_width
+            track_height = self.height
+            thumb_height = max(20, track_height * visible_rows // total_rows)
+            thumb_y = self.y + track_height - int(
+                (track_height - thumb_height) * self._scroll_offset / max(1, max_offset)
+            ) - thumb_height
+
+            self._labels.append(pyglet.shapes.Rectangle(
+                x=scrollbar_x, y=self.y,
+                width=self._scrollbar_width, height=track_height,
+                color=_hex_to_rgb(DARK_GRAY_COLOR),
+                batch=batch
+            ))
+            self._labels.append(pyglet.shapes.Rectangle(
+                x=scrollbar_x, y=thumb_y,
+                width=self._scrollbar_width, height=thumb_height,
+                color=_hex_to_rgb(GRAY_COLOR),
+                batch=batch
+            ))
+
+    def _on_reposition(self) -> None:
+        self._labels = []
+
+
+
+
+
+
+
+
+
+
+class _FlowNode(Widget):
+    HDR_H = 22
+    ROW_H = 20
+    PR    = 5
+
+    def __init__(self, part_eid, label, ports, wx=0.0, wy=0.0, on_inspect=None):
+        # x, y, width, height are in canvas world space
+        w = 140
+        h = _FlowNode.HDR_H + max(len(ports), 1) * _FlowNode.ROW_H
+        super().__init__(wx, wy, w, h)
+        self.part_eid = part_eid
+        self.label    = label
+        self.ports    = ports   # list[tuple[str, PORT_TYPE]]
+
+        self.flipped = False
+
+        btn_h = self.HDR_H - 4
+        self._btn_flip = TextButtonWidget(
+            0, 0, btn_h, btn_h, text="<>",
+            action=lambda: setattr(self, 'flipped', not self.flipped),
+            font_size=8, xpadding=2
+        )
+        self._btn_inspect = TextButtonWidget(
+            0, 0, btn_h, btn_h, text="i",
+            action=(lambda: on_inspect(part_eid)) if on_inspect else None,
+            font_size=8, xpadding=4
+        )
+
+    @property
+    def buttons(self):
+        return [self._btn_flip, self._btn_inspect]
+
+    def hit_test(self, wx, wy):
+        return self.x <= wx <= self.x + self.width and self.y <= wy <= self.y + self.height
+
+    def port_world_pos(self, port):
+        from ...components.assemblies import PORT_DIRECTION
+        i      = self.ports.index(port)
+        body_h = max(len(self.ports), 1) * self.ROW_H
+        ly     = body_h - (i + 0.5) * self.ROW_H
+        is_out = port[2] == PORT_DIRECTION.OUT
+        on_right = is_out ^ self.flipped   # XOR — flip inverts the default
+        lx = float(self.width) if on_right else 0.0
+        return self.x + lx, self.y + ly
+
+    def port_at(self, wx, wy, zoom):
+        r = self.PR * 2 / zoom
+        for port in self.ports:
+            px, py = self.port_world_pos(port)
+            if (wx - px)**2 + (wy - py)**2 <= r**2:
+                return port
+        return None
+
+    def draw(self, batch, to_screen, zoom, selected, shapes):
+        sx, sy = to_screen(self.x, self.y)
+        sw     = self.width  * zoom
+        sh     = self.height * zoom
+        hh     = self.HDR_H  * zoom
+        fsz    = max(11, int(9 * zoom))
+        border = _hex_to_rgb(SELECTED_COLOR if selected else OTHER_COLOR)
+
+        shapes += [
+            pyglet.shapes.Rectangle(sx, sy, sw, sh, color=_hex_to_rgb(DARK_GRAY_COLOR), batch=batch),
+            pyglet.shapes.Box(sx, sy, sw, sh, thickness=1, color=border, batch=batch),
+            pyglet.shapes.Rectangle(sx, sy + sh - hh, sw, hh, color=_hex_to_rgb(GRAY_COLOR), batch=batch),
+            pyglet.text.Label(self.label, x=sx + 4*zoom, y=sy + sh - hh + 4*zoom,
+                              font_name="Consolas", font_size=fsz,
+                              color=_hex_to_rgb(SELECTED_COLOR), batch=batch),
+        ]
+
+        # update and draw header buttons in screen space
+        btn_h = max(8, int(hh - 4))
+        for i, btn in enumerate(self.buttons):
+            btn.width  = btn_h
+            btn.height = btn_h
+            btn.x = int(sx + sw - (i + 1) * (btn_h + 2))
+            btn.y = int(sy + sh - hh + 2)
+            btn._on_reposition()
+            btn.draw(batch)
+
+        for port in self.ports:
+            px, py   = to_screen(*self.port_world_pos(port))
+            pr       = self.PR * zoom
+            on_right = (port[2] == PORT_DIRECTION.OUT) ^ self.flipped
+            color    = SELECTED_COLOR if port[2] == PORT_DIRECTION.OUT else OTHER_COLOR
+            label_x  = px - (pr + 2) if on_right else px + (pr + 2)
+            anchor   = "right" if on_right else "left"
+            shapes += [
+                pyglet.shapes.Circle(px, py, pr, color=_hex_to_rgb(color), batch=batch),
+                pyglet.text.Label(
+                    port[0],
+                    x=label_x, y=py - fsz // 2,
+                    font_name="Consolas", font_size=max(6, fsz - 1),
+                    color=_hex_to_rgb(color),
+                    anchor_x=anchor, batch=batch
+                ),
+            ]
+
+    def _on_reposition(self):
+        pass
+
+
+
+
+
+
+class FlowgraphCanvasWidget(Widget):
+
+    BEZIER_SEGS = 20
+    CTRL        = 70
+
+    def __init__(self, x, y, width, height, on_inspect=None):
+        super().__init__(x, y, width, height)
+        self._on_inspect = on_inspect
+        self._cam_x    = 0.0
+        self._cam_y    = 0.0
+        self._cam_zoom = 1.0
+        self.nodes  = []   # list[_FlowNode]
+        self.edges  = []   # list[tuple[_FlowNode, port, _FlowNode, port]]
+        self._state      = "idle"   # idle | panning | drag_node | draw_edge
+        self._drag_node  = None
+        self._edge_src   = None
+        self._edge_port  = None
+        self._edge_cur   = None
+        self._selected   = None
+        self._shapes     = []
+
+
+
+    # transforms
+
+    def _to_screen(self, wx, wy):
+        sx = (wx - self._cam_x) * self._cam_zoom + self.x + self.width  / 2
+        sy = (wy - self._cam_y) * self._cam_zoom + self.y + self.height / 2
+        return sx, sy
+
+    def _to_world(self, sx, sy):
+        wx = (sx - self.x - self.width  / 2) / self._cam_zoom + self._cam_x
+        wy = (sy - self.y - self.height / 2) / self._cam_zoom + self._cam_y
+        return wx, wy
+
+
+
+    # loading
+
+    def load_assembly(self, assembly_eid: int, world: World):
+        from ...components.assemblies import Assembly, PartIdentity, FlowgraphLayout
+        self.nodes.clear()
+        self.edges.clear()
+        assemblies = world.get_component(Assembly)
+        identities = world.get_component(PartIdentity)
+
+        if assembly_eid not in assemblies:
+            return
+        
+        assembly = assemblies[assembly_eid]
+        eid_to_node = {}
+
+        # Build nodes
+        for i, part_eid in enumerate(assembly.parts):
+            identity = identities.get(part_eid)
+            if identity is None:
+                continue
+            node = _FlowNode(
+                part_eid, identity.name or f"Part {part_eid}",
+                identity.ports,
+                wx=(i % 4) * (_FlowNode.HDR_H + 80),
+                wy=-(i // 4) * 180,
+                on_inspect=self._on_inspect
+            )
+            self.nodes.append(node)
+            eid_to_node[part_eid] = node
+
+        # Apply saved positions
+        layouts = world.get_component(FlowgraphLayout)
+        layout = layouts.get(assembly_eid)
+        if layout:
+            for node in self.nodes:
+                if node.part_eid in layout.positions:
+                    node.x, node.y = layout.positions[node.part_eid]
+                if node.part_eid in layout.flipped:
+                    node.flipped = layout.flipped[node.part_eid]
+
+        # Connect nodes
+        for from_eid, from_port, to_eid, to_port in assembly.edges:
+            a = eid_to_node.get(from_eid)
+            b = eid_to_node.get(to_eid)
+            if a and b:
+                pa = next((p for p in a.ports if p[0] == from_port), None)
+                pb = next((p for p in b.ports if p[0] == to_port),   None)
+                if pa and pb:
+                    self.edges.append((a, pa, b, pb))
+
+    def write_back(self, assembly: Assembly):
+        assembly.edges = [(a.part_eid, pa[0], b.part_eid, pb[0])
+                          for a, pa, b, pb in self.edges]
+        
+    def save_layout(self, assembly_eid: int, world: World):
+        from ...components.assemblies import FlowgraphLayout
+        layouts = world.get_component(FlowgraphLayout)
+        if assembly_eid not in layouts:
+            world.add_component(assembly_eid, FlowgraphLayout())
+            layouts = world.get_component(FlowgraphLayout)
+
+        layouts[assembly_eid].positions = {n.part_eid: (n.x, n.y) for n in self.nodes}
+        layouts[assembly_eid].flipped   = {n.part_eid: n.flipped for n in self.nodes}
+
+    def _port_direction(self, node, port):
+        on_right = (port[2] == PORT_DIRECTION.OUT) ^ node.flipped
+        return 1 if on_right else -1
+
+    def _bezier(self, p0, p1, d0, d1, color, batch):
+        x0, y0 = p0
+        x1, y1 = p1
+        ctrl = self.CTRL * self._cam_zoom
+        cx0, cy0 = x0 + d0 * ctrl, y0
+        cx1, cy1 = x1 + d1 * ctrl, y1
+        def b(t):
+            mt = 1 - t
+            return (mt**3*x0 + 3*mt**2*t*cx0 + 3*mt*t**2*cx1 + t**3*x1,
+                    mt**3*y0 + 3*mt**2*t*cy0 + 3*mt*t**2*cy1 + t**3*y1)
+        pts = [b(i / self.BEZIER_SEGS) for i in range(self.BEZIER_SEGS + 1)]
+        for a, b_ in zip(pts, pts[1:]):
+            self._shapes.append(pyglet.shapes.Line(
+                a[0], a[1], b_[0], b_[1], thickness=1, color=color, batch=batch))
+
+
+
+    # Draw
+
+    def draw(self, batch):
+        self._shapes = []
+        self._shapes.append(pyglet.shapes.Rectangle(
+            self.x, self.y, self.width, self.height,
+            color=_hex_to_rgb(DARK_GRAY_COLOR), batch=batch))
+
+        for a, pa, b, pb in self.edges:
+            p0 = self._to_screen(*a.port_world_pos(pa))
+            p1 = self._to_screen(*b.port_world_pos(pb))
+            self._bezier(p0, p1, self._port_direction(a, pa), self._port_direction(b, pb),
+                        _hex_to_rgb(OTHER_COLOR), batch)
+
+        if self._state == "draw_edge" and self._edge_src and self._edge_cur:
+            p0 = self._to_screen(*self._edge_src.port_world_pos(self._edge_port))
+            p1 = self._to_screen(*self._edge_cur)
+            self._bezier(p0, p1, self._port_direction(self._edge_src, self._edge_port), 1,
+                        _hex_to_rgb(SELECTED_COLOR), batch)
+
+        for node in self.nodes:
+            node.draw(batch, self._to_screen, self._cam_zoom,
+                      node is self._selected, self._shapes)
+
+    def _edge_at(self, wx, wy, threshold=8.0):
+        """Return index of edge under world-space point, or None."""
+        t = threshold / self._cam_zoom
+        for i, (a, pa, b, pb) in enumerate(self.edges):
+            x0, y0 = a.port_world_pos(pa)
+            x1, y1 = b.port_world_pos(pb)
+            # point-to-segment distance
+            dx, dy = x1 - x0, y1 - y0
+            if dx == 0 and dy == 0:
+                continue
+            s = max(0, min(1, ((wx - x0)*dx + (wy - y0)*dy) / (dx*dx + dy*dy)))
+            px, py = x0 + s*dx, y0 + s*dy
+            if (wx - px)**2 + (wy - py)**2 <= t**2:
+                return i
+        return None
+
+    # Handlers
+
+    def on_mouse_press(self, x, y, button, modifiers):  
+        if not self.hit_test(x, y):
+            return False
+        
+
+        if button == pyglet.window.mouse.LEFT:
+            # buttons are screen-space — check before world conversion
+            for node in reversed(self.nodes):
+                for btn in node.buttons:
+                    if btn.on_mouse_press(x, y, button, modifiers):
+                        return True
+
+            wx, wy = self._to_world(x, y)
+            for node in reversed(self.nodes):
+                port = node.port_at(wx, wy, self._cam_zoom)
+                if port:
+                    self._state, self._edge_src, self._edge_port, self._edge_cur = \
+                        "draw_edge", node, port, (wx, wy)
+                    return True
+                
+            for node in reversed(self.nodes):
+                if node.hit_test(wx, wy):
+                    self._state, self._drag_node, self._selected = \
+                        "drag_node", node, node
+                    return True
+            self._state, self._selected = "panning", None
+            return True
+        
+        # Deleting edges
+        if button == pyglet.window.mouse.RIGHT:
+            i = self._edge_at(wx, wy)
+            if i is not None:
+                self.edges.pop(i)
+                return True
+    
+        return False
+
+    def on_mouse_release(self, x, y, button, modifiers):
+        if button == pyglet.window.mouse.LEFT:
+            for node in self.nodes:
+                for btn in node.buttons:
+                    btn.on_mouse_release(x, y, button, modifiers)
+
+            if self._state == "draw_edge":
+                wx, wy = self._to_world(x, y)
+                for node in self.nodes:
+                    if node is self._edge_src:
+                        continue
+                    port = node.port_at(wx, wy, self._cam_zoom)
+                    if port and port[1] == self._edge_port[1]:
+                        self.edges.append((self._edge_src, self._edge_port, node, port))
+                        break
+            self._state = "idle"
+            self._drag_node = self._edge_src = self._edge_port = self._edge_cur = None
+        return False
+
+    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers):
+        if self._state == "panning":
+            self._cam_x -= dx / self._cam_zoom
+            self._cam_y -= dy / self._cam_zoom
+            return True
+        if self._state == "drag_node" and self._drag_node:
+            self._drag_node.x += dx / self._cam_zoom
+            self._drag_node.y += dy / self._cam_zoom
+            return True
+        if self._state == "draw_edge":
+            self._edge_cur = self._to_world(x, y)
+            return True
+        return False
+
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
+        if not self.hit_test(x, y):
+            return False
+        wx0, wy0 = self._to_world(x, y)
+        self._cam_zoom *= ZOOM_FACTOR if scroll_y > 0 else 1 / ZOOM_FACTOR
+        wx1, wy1 = self._to_world(x, y)
+        self._cam_x -= wx1 - wx0
+        self._cam_y -= wy1 - wy0
+        return True
+    
+    def on_mouse_motion(self, x, y, dx, dy):
+        for node in self.nodes:
+            for btn in node.buttons:
+                btn.on_mouse_motion(x, y, dx, dy)
+        return False
+
+    def _on_reposition(self):
+        pass
+
+
 
 
 
