@@ -7,12 +7,14 @@ if TYPE_CHECKING:
     from ..components import Component
     from ..systems import System
 
+import time
+
 from ..config import MAX_SUBSTEP_DELTA_T, MAX_SUBSTEPS
 
 class World():
     """A world that holds data"""
 
-    def __init__(self, timewarp = 1.0) -> None:
+    def __init__(self, timewarp = 1.0, debug_prints = False) -> None:
         """Initialize an empty world"""
         self._next_eid = 0
         self.components = {}  
@@ -22,10 +24,11 @@ class World():
         self.time = 0
         self.timewarp = timewarp
 
-        # Debudding state
+        # Debugging state
         self.last_sim_dt = -1.0
         self.last_sub_steps = -1
         self.last_sub_dt = -1.0
+        self.debug_prints = debug_prints
 
 
     # Entity Helpers
@@ -41,6 +44,10 @@ class World():
         for store in self.components.values():
             store.pop(eid, None)
     
+    def spawn(self, agent_class: type[Agent], **kwargs) -> int:
+        """Update the ECS with an agent definition"""
+        agent = agent_class(self, **kwargs)
+        return agent._eid
 
 
     # Component Helpers
@@ -71,7 +78,14 @@ class World():
         sub_dt = sim_dt/steps
         for _ in range(steps):
             for system in self.systems:
+
+                if self.debug_prints:
+                     t = time.perf_counter()
+                
                 system.update(self,sub_dt)
+
+                if self.debug_prints:
+                    print(f"system {system}: {time.perf_counter()-t:.6f}s")
 
         # Debugging logging
         self.last_sim_dt = sim_dt

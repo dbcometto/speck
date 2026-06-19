@@ -101,8 +101,11 @@ class AssemblySystem(System):
         for part_eid, port_name in network:
             if part_eid not in resources or part_eid not in identities:
                 continue
+
             rb          = resources[part_eid]
-            storage_key = rb.port_mapping.get(port_name)
+            port_to_storage = {v: k for k, v in rb.port_mapping.items()} # reverse mapping
+            storage_key = port_to_storage.get(port_name)
+
             if storage_key is None:
                 continue
             port = self._get_port(identities[part_eid], port_name)
@@ -144,24 +147,45 @@ class AssemblySystem(System):
 
     # Processing Steps
 
-    def _run_scripts(self, assembly_eid: int,
-                     assembly:     Assembly,
-                     identities:   dict[int, PartIdentity],
-                     scripts:      dict[int, ScriptBehavior],
-                     world:        World,
-                     dt:           float) -> None:
+    # Old
+    # def _run_scripts(self, assembly_eid: int,
+    #                  assembly:     Assembly,
+    #                  identities:   dict[int, PartIdentity],
+    #                  scripts:      dict[int, ScriptBehavior],
+    #                  world:        World,
+    #                  dt:           float) -> None:
+    #     for part_eid in assembly.parts:
+    #         if part_eid not in scripts or part_eid not in identities:
+    #             continue
+    #         sb      = scripts[part_eid]
+    #         outputs: dict[str, Any] | None = sb.script.update(assembly_eid, world, dt)
+    #         if not outputs:
+    #             continue
+    #         pi = identities[part_eid]
+    #         for script_port, value in outputs.items():
+    #             real_port = sb.port_mapping.get(script_port, script_port)
+    #             if real_port in pi.port_values:
+    #                 pi.port_values[real_port] = value
+
+    def _run_scripts(self, assembly_eid, assembly, identities, scripts, world, dt):
         for part_eid in assembly.parts:
             if part_eid not in scripts or part_eid not in identities:
                 continue
-            sb      = scripts[part_eid]
-            outputs: dict[str, Any] | None = sb.script.update(assembly_eid, world, dt)
-            if not outputs:
-                continue
+            sb = scripts[part_eid]
             pi = identities[part_eid]
-            for script_port, value in outputs.items():
-                real_port = sb.port_mapping.get(script_port, script_port)
-                if real_port in pi.port_values:
-                    pi.port_values[real_port] = value
+            for entry in sb.callables:
+                entry[2] += dt
+                fn, period, time_elapsed = entry
+                
+                if time_elapsed >= period:
+                    entry[2] = 0.0
+                    outputs = fn(world, dt)
+
+                    if outputs:
+                        for port_name, value in outputs.items():
+                            if port_name in pi.port_values:
+                                pi.port_values[port_name] = value
+
 
     def _propagate_data(self, assembly:   Assembly,
                         identities: dict[int, PartIdentity]) -> None:

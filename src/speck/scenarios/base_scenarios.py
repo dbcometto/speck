@@ -2,7 +2,7 @@
 import math
 
 from speck.core import World
-from speck.entities import generate_body, generate_moveable_agent, generate_agent_with_thruster, generate_agent_with_rcs_and_thruster
+from speck.entities import generate_body, generate_moveable_agent#, generate_agent_with_thruster, generate_agent_with_rcs_and_thruster
 
 from speck.config import G
 
