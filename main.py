@@ -35,6 +35,7 @@ generate_agent_with_rcs_and_thruster(world, x=5.0, y=0.0, mass=1.0, max_thrust=0
 # Set up rendering
 windows = []
 main_window = ViewportWindow(world, windows, width=1800, height=900)
+main_window2 = ViewportWindow(world, windows, width=1800, height=900)
 
 
 

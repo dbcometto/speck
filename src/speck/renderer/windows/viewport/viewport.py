@@ -2,6 +2,7 @@
 import pyglet
 import time
 from enum import IntEnum
+import math
 
 from .camera import Camera
 from .hud import HUD
@@ -12,6 +13,7 @@ from ....components.dynamics import Position
 from ....components.rendering import RenderData, RenderType
 from ....config import POINT_ICON_RADIUS, MIN_BODY_SCREEN_RADIUS, SELECT_SQUARE_PADDING
 from ....config import SELECTED_COLOR, OTHER_COLOR, BACKGROUND_COLOR
+from ....config import GRID_TARGET_PX, GRID_MAX_LINES, GRID_MAJOR_COLOR, GRID_MINOR_COLOR, GRID_MIN_MINOR_PX
 from ....utils import _hex_to_rgb
 
 class ViewportWindow(SpeckWindow):
@@ -46,6 +48,10 @@ class ViewportWindow(SpeckWindow):
         batch = pyglet.graphics.Batch()
         shapes = []
 
+        # Draw Grid
+        self._draw_grid(batch, shapes)
+
+        # Draw things
         positions = self.world.get_component(Position)
         renderdatas = self.world.get_component(RenderData)
 
@@ -90,6 +96,8 @@ class ViewportWindow(SpeckWindow):
                 ))
 
         batch.draw()
+
+        # Draw hud
         self.hud.draw()
 
 
@@ -118,3 +126,40 @@ class ViewportWindow(SpeckWindow):
 
                 self.camera.origin_x = pos.x
                 self.camera.origin_y = pos.y
+
+    def _draw_grid(self, batch, shapes) -> None:
+        """Draw an adaptive grid"""
+
+        raw_spacing = GRID_TARGET_PX / self.camera.zoom
+
+        # Snap to 1×10^n
+        exp = math.floor(math.log10(raw_spacing))
+        
+        spacing_coarse = 10 ** exp
+        spacing_fine = 10 ** (exp - 1)
+
+        # Guard against too many lines
+        # Probably never activates
+        x0, y0 = self.camera.screen_to_world(0, 0)
+        x1, y1 = self.camera.screen_to_world(self.width, self.height)
+        left, right = min(x0, x1), max(x0, x1)
+        bottom, top = min(y0, y1), max(y0, y1)
+
+        # fine_px = spacing_fine * self.camera.zoom
+        # fine_alpha = int(_hex_to_rgb(GRID_MINOR_COLOR)[3] * min(1.0, (fine_px - GRID_MIN_MINOR_PX) / (GRID_TARGET_PX - GRID_MIN_MINOR_PX)))
+        # color_minor_faded = (_hex_to_rgb(GRID_MINOR_COLOR)[0], _hex_to_rgb(GRID_MINOR_COLOR)[1], _hex_to_rgb(GRID_MINOR_COLOR)[2], fine_alpha)
+
+        if (right - left) / spacing_fine <= GRID_MAX_LINES:
+
+            for spacing, color in [(spacing_fine, _hex_to_rgb(GRID_MINOR_COLOR)), (spacing_coarse, _hex_to_rgb(GRID_MAJOR_COLOR))]:
+                x = math.floor(left / spacing) * spacing
+                while x <= right + spacing:
+                    sx, _ = self.camera.world_to_screen(x, 0)
+                    shapes.append(pyglet.shapes.Line(sx, 0, sx, self.height, color=color, batch=batch))
+                    x += spacing
+
+                y = math.floor(bottom / spacing) * spacing
+                while y <= top + spacing:
+                    _, sy = self.camera.world_to_screen(0, y)
+                    shapes.append(pyglet.shapes.Line(0, sy, self.width, sy, color=color, batch=batch))
+                    y += spacing
