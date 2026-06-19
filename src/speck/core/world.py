@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..components import Component
     from ..systems import System
+    from ..sdk.agent import Agent
 
 import time
 

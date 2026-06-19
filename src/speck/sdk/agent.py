@@ -12,6 +12,7 @@ from ..components.dynamics import Attitude, AngularVelocity, AngularAcceleration
 from ..components.rendering import RenderData
 from ..components.functional import Identity
 from ..components.assemblies import Assembly
+from ..components.rendering import RenderType
 
 
 class Agent(ABC):
@@ -38,7 +39,7 @@ class Agent(ABC):
         world.add_component(self._eid, AngularAcceleration())
         world.add_component(self._eid, Mass(mass))
         world.add_component(self._eid, GravityConsumer())
-        world.add_component(self._eid, RenderData())
+        world.add_component(self._eid, RenderData(render_type=RenderType.TRIANGLE))
 
         # Assembly
         self._assembly = Assembly()

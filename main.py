@@ -25,7 +25,7 @@ timewarp = 1
 
 
 # Create a world
-world = World(timewarp=timewarp, debug_prints=True)
+world = World(timewarp=timewarp, debug_prints=False)
 
 # Systems in order
 world.add_system(ResetAccelerationSystem())

@@ -9,10 +9,10 @@ from .hud import HUD
 from .input_handler import InputHandler
 from ...windows import SpeckWindow
 from ....core import World
-from ....components.dynamics import Position
+from ....components.dynamics import Position, Attitude, Velocity
 from ....components.rendering import RenderData, RenderType
 from ....config import POINT_ICON_RADIUS, MIN_BODY_SCREEN_RADIUS, SELECT_SQUARE_PADDING
-from ....config import SELECTED_COLOR, OTHER_COLOR, BACKGROUND_COLOR
+from ....config import SELECTED_COLOR, OTHER_COLOR, BACKGROUND_COLOR, VELOCITY_ARROW_COLOR
 from ....config import GRID_TARGET_PX, GRID_MAX_LINES, GRID_MAJOR_COLOR, GRID_MINOR_COLOR, GRID_MIN_MINOR_PX
 from ....utils import _hex_to_rgb
 
@@ -53,6 +53,8 @@ class ViewportWindow(SpeckWindow):
 
         # Draw things
         positions = self.world.get_component(Position)
+        velocities = self.world.get_component(Velocity)
+        attitudes = self.world.get_component(Attitude)
         renderdatas = self.world.get_component(RenderData)
 
         for eid in positions.keys() & renderdatas.keys():
@@ -77,6 +79,34 @@ class ViewportWindow(SpeckWindow):
 
                 shapes.append(pyglet.shapes.Circle(x=sx, y=sy, radius=radius, color=tuple_color, batch=batch))
 
+            elif data.render_type == RenderType.TRIANGLE:
+                if sx < 0 or sx > self.width or sy < 0 or sy > self.height:
+                    continue
+
+                vel = velocities.get(eid)
+
+                # fixed equilateral triangle
+                r = POINT_ICON_RADIUS * 1.5
+                shapes.append(pyglet.shapes.Triangle(
+                    sx,           sy + r,
+                    sx - r*0.866, sy - r*0.5,
+                    sx + r*0.866, sy - r*0.5,
+                    color=tuple_color, batch=batch
+                ))
+
+                # velocity vector
+                if vel is not None:
+                    speed = math.sqrt(vel.x**2 + vel.y**2)
+                    if speed > 0.01:
+                        direction = math.atan2(vel.y, vel.x)
+                        vr = speed * 2.0
+                        end_x = sx + vr * math.cos(direction)
+                        end_y = sy + vr * math.sin(direction)
+                        shapes.append(pyglet.shapes.Line(
+                            sx, sy, end_x, end_y,
+                            color=_hex_to_rgb(VELOCITY_ARROW_COLOR), batch=batch
+                        ))
+
 
             # Draw hover square
             if eid == self.input_handler.hover_eid:
@@ -85,6 +115,9 @@ class ViewportWindow(SpeckWindow):
                 
                 elif data.render_type == RenderType.CIRCLE:
                     size = 2*radius + SELECT_SQUARE_PADDING
+
+                if data.render_type == RenderType.TRIANGLE:
+                    size = 2*POINT_ICON_RADIUS + SELECT_SQUARE_PADDING
                 
                 shapes.append(pyglet.shapes.Box(
                     x=sx - size/2, 

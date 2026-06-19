@@ -6,6 +6,7 @@ from .component import Component
 class RenderType(IntEnum):
     POINT = 0
     CIRCLE = 1
+    TRIANGLE = 2
 
 class RenderData(Component):
     """Contains rendering data"""
