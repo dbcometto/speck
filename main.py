@@ -6,7 +6,7 @@ from speck.renderer.windows import ViewportWindow, InspectorWindow
 from speck.systems.dynamics import ResetAccelerationSystem, ResetAngularAccelerationSystem, GravitySystem, MovementSystem, AttitudeSystem
 from speck.systems.assemblies import AssemblySystem
 
-from speck.scenarios.base_scenarios import generate_scene_smallbody, generate_scene_2smallbody #, generate_agent_with_thruster, generate_agent_with_rcs_and_thruster
+from speck.scenarios.base_scenarios import generate_scene_smallbody, generate_scene_2smallbody
 from speck.scenarios.agent_scenarios import generate_scene_emptythruster, generate_scene_emptythrusterrcs
 
 import time
@@ -31,7 +31,6 @@ world.add_system(AttitudeSystem())
 # Populate the world
 # generate_scene_smallbody(world)
 # generate_scene_2smallbody(world)
-# generate_agent_with_rcs_and_thruster(world, x=5.0, y=0.0, mass=1.0, max_thrust=0.1, max_torque=0.1)
 generate_scene_emptythrusterrcs(world)
 
 # Set up rendering
