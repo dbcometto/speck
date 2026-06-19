@@ -1,5 +1,6 @@
 """Run Speck"""
 import pyglet
+import time
 
 from speck.core import World
 from speck.renderer.windows import ViewportWindow, InspectorWindow
@@ -7,9 +8,15 @@ from speck.systems.dynamics import ResetAccelerationSystem, ResetAngularAccelera
 from speck.systems.assemblies import AssemblySystem
 
 from speck.scenarios.base_scenarios import generate_scene_smallbody, generate_scene_2smallbody
-from speck.scenarios.agent_scenarios import generate_scene_emptythruster, generate_scene_emptythrusterrcs
+from speck.scenarios.agent_scenarios import (
+    generate_scene_emptythruster, generate_scene_emptythrusterrcs, 
+    generate_scene_ansible_test, generate_scene_ansible_test2, generate_scene_navigator, 
+    generate_scene_thread_test, generate_scene_mpc_navigator,
+)
 
-import time
+from speck.ssh import start_ssh_server
+
+
 
 
 # Config
@@ -18,7 +25,7 @@ timewarp = 1
 
 
 # Create a world
-world = World(timewarp=timewarp, debug_prints=False)
+world = World(timewarp=timewarp, debug_prints=True)
 
 # Systems in order
 world.add_system(ResetAccelerationSystem())
@@ -31,23 +38,27 @@ world.add_system(AttitudeSystem())
 # Populate the world
 # generate_scene_smallbody(world)
 # generate_scene_2smallbody(world)
-generate_scene_emptythrusterrcs(world)
+# generate_scene_emptythrusterrcs(world)
+# generate_scene_ansible_test(world)
+# generate_scene_ansible_test2(world)
+# generate_scene_navigator(world)
+# generate_scene_thread_test(world)
+generate_scene_mpc_navigator(world)
 
 # Set up rendering
 windows = []
-main_window = ViewportWindow(world, windows, width=1800, height=900)
-# main_window2 = ViewportWindow(world, windows, width=1800, height=900)
 
 
 
+if __name__ == '__main__':
+    start_ssh_server(world)
 
-
-
-# define update
-start = time.perf_counter()
-def update(dt):
-    world.update(dt)
-    main_window.hud.update_ups(dt)
-
-pyglet.clock.schedule_interval(update, dt)
-pyglet.app.run()
+    main_window = ViewportWindow(world, windows, width=1800, height=900)
+    # main_window2 = ViewportWindow(world, windows, width=1800, height=900)
+    
+    def update(dt):
+        world.update(dt)
+        main_window.hud.update_ups(dt)
+    
+    pyglet.clock.schedule_interval(update, dt)
+    pyglet.app.run()

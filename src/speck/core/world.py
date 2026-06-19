@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 import time
 
 from ..config import MAX_SUBSTEP_DELTA_T, MAX_SUBSTEPS
+from .message_network import MessageNetwork
 
 class World():
     """A world that holds data"""
@@ -19,6 +20,7 @@ class World():
         self._next_eid = 0
         self.components = {}  
         self.systems = []
+        self.message_network = MessageNetwork()
 
         # World state
         self.time = 0

@@ -45,18 +45,32 @@ class PartIdentity(Component):
 
 # Scripts
 
-# Old
-# class ScriptBehavior(Component):
-#     """Assigns a behavior script to a part"""
-#     def __init__(self, script: Script, port_mapping: dict[str, str] | None = None) -> None:
-#         """Assigns a behavior script to a part"""
-#         self.script = script
-#         self.port_mapping = port_mapping if port_mapping is not None else {} # maps script port name -> real part port name
-
 class ScriptBehavior(Component):
     """Holds a list of callables that run on a timer and write to this part's ports"""
     def __init__(self, callables: list | None = None) -> None:
         self.callables: list = callables or []  # [[fn, period, time_elapsed], ...]
+
+
+# Sensor Parts
+
+class AnsibleBehavior(Component):
+    """Maps message network keys to/from ports"""
+    def __init__(self, receive: dict[str, str] | None = None,
+                       transmit: dict[str, str] | None = None) -> None:
+        self.receive  = receive  or {}  # msg_key -> port_name
+        self.transmit = transmit or {}  # port_name -> msg_key
+
+class PositionSensorBehavior(Component):
+    pass
+
+class HeadingSensorBehavior(Component):
+    pass
+
+class VelocitySensorBehavior(Component):
+    pass
+
+class AngularVelocitySensorBehavior(Component):
+    pass
 
 
 # Actuator Parts

@@ -7,8 +7,9 @@ if TYPE_CHECKING:
     from ..components.assemblies import Assembly
 
 from ..components.assemblies import (
-    PartIdentity, ThrusterBehavior, AttitudeBehavior,
-    ResourceBehavior, ScriptBehavior, PORT_TYPE, PORT_DIRECTION
+    PartIdentity, ThrusterBehavior, AttitudeBehavior, ResourceBehavior, ScriptBehavior, 
+    AnsibleBehavior, PositionSensorBehavior, VelocitySensorBehavior, HeadingSensorBehavior, AngularVelocitySensorBehavior,
+    PORT_TYPE, PORT_DIRECTION
 )
 
 
@@ -33,8 +34,8 @@ class ComputerHandle(PartHandle):
         super().__init__(part_eid, ports)
         self._sb = script_behavior
     
-    def run(self, fn, period=1.0):
-        self._sb.callables.append([fn, period, 0.0])
+    def run(self, fn, period=1.0, threaded=False):
+        self._sb.callables.append([fn, period, 0.0, threaded])
         return self
 
 
@@ -45,9 +46,129 @@ class Part:
     def _instantiate(self, world: World, assembly_eid: int, assembly: Assembly) -> PartHandle:
         """Enter the part into the ECS"""
         raise NotImplementedError
+    
+class Ports:
+    def __init__(self, part_identity: PartIdentity):
+        self._pi = part_identity
+    
+    def __getattr__(self, name):
+        if name in self._pi.port_values:
+            return self._pi.port_values[name]
+        raise AttributeError(f"No port '{name}'")
+    
+    def __setattr__(self, name, value):
+        if name.startswith("_"):
+            super().__setattr__(name, value)
+        elif name in self._pi.port_values:
+            self._pi.port_values[name] = value
+        else:
+            raise AttributeError(f"No port '{name}'")
 
 
-# Parts
+
+
+
+
+# ================ Parts ================ #
+
+# Computer
+
+class Computer(Part):
+    def __init__(self, power=10.0, outputs=None, inputs=None):
+        self.power = power
+        self._outputs = outputs or []  # list of port name strings
+        self._inputs  = inputs  or []
+    
+    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
+        ports = [("power_in", PORT_TYPE.POWER, PORT_DIRECTION.IN)]
+        ports += [(name, PORT_TYPE.DATA, PORT_DIRECTION.OUT) for name in self._outputs]
+        ports += [(name, PORT_TYPE.DATA, PORT_DIRECTION.IN)  for name in self._inputs]
+        
+        eid = world.create_entity()
+        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="Computer", ports=ports))
+        sb = ScriptBehavior()
+        world.add_component(eid, sb)
+
+        assembly.parts.append(eid)
+
+        return ComputerHandle(eid, ports, sb)
+    
+
+
+# Sensors
+
+class Ansible(Part):
+    def __init__(self, receive: dict[str, str] | None = None,
+                       transmit: dict[str, str] | None = None):
+        self.receive  = receive  or {}
+        self.transmit = transmit or {}
+
+    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
+        ports  = [(port_name, PORT_TYPE.DATA, PORT_DIRECTION.OUT)
+                  for port_name in self.receive.values()]
+        ports += [(port_name, PORT_TYPE.DATA, PORT_DIRECTION.IN)
+                  for port_name in self.transmit.keys()]
+
+        eid = world.create_entity()
+        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="Ansible", ports=ports))
+        world.add_component(eid, AnsibleBehavior(self.receive, self.transmit))
+
+        assembly.parts.append(eid)
+
+        return PartHandle(eid, ports)
+    
+class PositionSensor(Part):
+    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
+        ports = [
+            ("x", PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+            ("y", PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+        ]
+        eid = world.create_entity()
+        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="PositionSensor", ports=ports))
+        world.add_component(eid, PositionSensorBehavior())
+        assembly.parts.append(eid)
+        return PartHandle(eid, ports)
+
+
+class HeadingSensor(Part):
+    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
+        ports = [
+            ("heading", PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+        ]
+        eid = world.create_entity()
+        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="HeadingSensor", ports=ports))
+        world.add_component(eid, HeadingSensorBehavior())
+        assembly.parts.append(eid)
+        return PartHandle(eid, ports)
+
+
+class VelocitySensor(Part):
+    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
+        ports = [
+            ("vx", PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+            ("vy", PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+        ]
+        eid = world.create_entity()
+        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="VelocitySensor", ports=ports))
+        world.add_component(eid, VelocitySensorBehavior())
+        assembly.parts.append(eid)
+        return PartHandle(eid, ports)
+
+
+class AngularVelocitySensor(Part):
+    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
+        ports = [
+            ("omega", PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+        ]
+        eid = world.create_entity()
+        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="AngularVelocitySensor", ports=ports))
+        world.add_component(eid, AngularVelocitySensorBehavior())
+        assembly.parts.append(eid)
+        return PartHandle(eid, ports)
+    
+
+
+# Actuators
 
 class Thruster(Part):
     def __init__(self, max_thrust=1.0, axis="+x", fuel_buffer=100.0):
@@ -81,7 +202,26 @@ class Thruster(Part):
 
         return PartHandle(eid, ports)
 
+class AttitudeController(Part):
+    def __init__(self, max_torque=1.0, axis="+z"):
+        self.max_torque = max_torque
+        self.axis = axis
 
+    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
+        ports = [
+            ("control_in", PORT_TYPE.DATA, PORT_DIRECTION.IN),
+        ]
+        eid = world.create_entity()
+        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="AttitudeController", ports=ports))
+        world.add_component(eid, AttitudeBehavior(
+            control_port="control_in",
+            max_torque=self.max_torque,
+            axis=self.axis
+        ))
+        assembly.parts.append(eid)
+        return PartHandle(eid, ports)
+
+# Resource System
 
 class Tank(Part):
     def __init__(self, resource="fuel", capacity=500.0, port_type=PORT_TYPE.FLUID, fill=0.0, transfer_rate = 100000.0):
@@ -113,42 +253,3 @@ class Tank(Part):
         return PartHandle(eid, ports)
 
 
-class AttitudeController(Part):
-    def __init__(self, max_torque=1.0, axis="+z"):
-        self.max_torque = max_torque
-        self.axis = axis
-
-    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
-        ports = [
-            ("control_in", PORT_TYPE.DATA, PORT_DIRECTION.IN),
-        ]
-        eid = world.create_entity()
-        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="AttitudeController", ports=ports))
-        world.add_component(eid, AttitudeBehavior(
-            control_port="control_in",
-            max_torque=self.max_torque,
-            axis=self.axis
-        ))
-        assembly.parts.append(eid)
-        return PartHandle(eid, ports)
-
-
-class Computer(Part):
-    def __init__(self, power=10.0, outputs=None, inputs=None):
-        self.power = power
-        self._outputs = outputs or []  # list of port name strings
-        self._inputs  = inputs  or []
-    
-    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
-        ports = [("power_in", PORT_TYPE.POWER, PORT_DIRECTION.IN)]
-        ports += [(name, PORT_TYPE.DATA, PORT_DIRECTION.OUT) for name in self._outputs]
-        ports += [(name, PORT_TYPE.DATA, PORT_DIRECTION.IN)  for name in self._inputs]
-        
-        eid = world.create_entity()
-        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="Computer", ports=ports))
-        sb = ScriptBehavior()
-        world.add_component(eid, sb)
-
-        assembly.parts.append(eid)
-
-        return ComputerHandle(eid, ports, sb)

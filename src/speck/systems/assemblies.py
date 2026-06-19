@@ -2,15 +2,25 @@
 from __future__ import annotations
 from typing import Any
 from collections import defaultdict
+import math
+import time
+
+import threading
 
 from ..core import World
 from ..components.assemblies import (
     Assembly, PartIdentity, ScriptBehavior,
-    ThrusterBehavior, AttitudeBehavior, ResourceBehavior,
-    PORT_TYPE, PORT_DIRECTION
+    ThrusterBehavior, AttitudeBehavior, ResourceBehavior, AnsibleBehavior, 
+    PositionSensorBehavior, VelocitySensorBehavior, HeadingSensorBehavior, AngularVelocitySensorBehavior,
+    PORT_TYPE, PORT_DIRECTION,
 )
-from ..components.dynamics import Acceleration, AngularAcceleration, Attitude
+from ..components.dynamics import (
+    Acceleration, AngularAcceleration, Attitude, 
+    Position, Velocity, AngularVelocity,
+)
 from .system import System
+
+from ..sdk.parts import Ports
 
 
 _PortKey = tuple[int, str]
@@ -24,15 +34,33 @@ class AssemblySystem(System):
         """Processes all assemblies each tick"""
         assemblies = world.get_component(Assembly)
         identities = world.get_component(PartIdentity)
+
         scripts    = world.get_component(ScriptBehavior)
         thrusters  = world.get_component(ThrusterBehavior)
         attitudes  = world.get_component(AttitudeBehavior)
         resources  = world.get_component(ResourceBehavior)
+
+        ansibles    = world.get_component(AnsibleBehavior)
+        pos_sensors  = world.get_component(PositionSensorBehavior)
+        hdg_sensors  = world.get_component(HeadingSensorBehavior)
+        vel_sensors  = world.get_component(VelocitySensorBehavior)
+        omg_sensors  = world.get_component(AngularVelocitySensorBehavior)
+        pose_sensors = world.get_component(PositionSensorBehavior)
+        velocity_sensors = world.get_component(VelocitySensorBehavior)
+
+        positions    = world.get_component(Position)
+        velocities   = world.get_component(Velocity)
         accels     = world.get_component(Acceleration)
         attitude_components = world.get_component(Attitude)
+        ang_vels     = world.get_component(AngularVelocity)
         ang_accels = world.get_component(AngularAcceleration)
 
         for assembly_eid, assembly in assemblies.items():
+            self._update_position_sensors(assembly_eid, assembly, identities, pos_sensors, positions)
+            self._update_heading_sensors(assembly_eid, assembly, identities, hdg_sensors, attitude_components)
+            self._update_velocity_sensors(assembly_eid, assembly, identities, vel_sensors, velocities)
+            self._update_angular_velocity_sensors(assembly_eid, assembly, identities, omg_sensors, ang_vels)
+            self._update_ansibles(assembly, identities, ansibles, world)
             self._run_scripts(assembly_eid, assembly, identities, scripts, world, dt)
             self._propagate_data(assembly, identities)
             self._update_rates(assembly, identities, thrusters, resources)
@@ -147,25 +175,74 @@ class AssemblySystem(System):
 
     # Processing Steps
 
-    # Old
-    # def _run_scripts(self, assembly_eid: int,
-    #                  assembly:     Assembly,
-    #                  identities:   dict[int, PartIdentity],
-    #                  scripts:      dict[int, ScriptBehavior],
-    #                  world:        World,
-    #                  dt:           float) -> None:
-    #     for part_eid in assembly.parts:
-    #         if part_eid not in scripts or part_eid not in identities:
-    #             continue
-    #         sb      = scripts[part_eid]
-    #         outputs: dict[str, Any] | None = sb.script.update(assembly_eid, world, dt)
-    #         if not outputs:
-    #             continue
-    #         pi = identities[part_eid]
-    #         for script_port, value in outputs.items():
-    #             real_port = sb.port_mapping.get(script_port, script_port)
-    #             if real_port in pi.port_values:
-    #                 pi.port_values[real_port] = value
+
+    def _update_position_sensors(self, assembly_eid, assembly, identities, sensors, positions):
+        for part_eid in assembly.parts:
+            if part_eid not in sensors or part_eid not in identities:
+                continue
+            pi  = identities[part_eid]
+            pos = positions.get(assembly_eid)
+            if pos is None:
+                continue
+            if "x" in pi.port_values: pi.port_values["x"] = pos.x
+            if "y" in pi.port_values: pi.port_values["y"] = pos.y
+
+    def _update_heading_sensors(self, assembly_eid, assembly, identities, sensors, attitudes):
+        for part_eid in assembly.parts:
+            if part_eid not in sensors or part_eid not in identities:
+                continue
+            pi  = identities[part_eid]
+            att = attitudes.get(assembly_eid)
+            if att is None:
+                continue
+            qw, qx, qy, qz = att.w, att.x, att.y, att.z
+            if "heading" in pi.port_values:
+                pi.port_values["heading"] = math.atan2(
+                    2*(qw*qz + qx*qy),
+                    1 - 2*(qy**2 + qz**2)
+                )
+
+    def _update_velocity_sensors(self, assembly_eid, assembly, identities, sensors, velocities):
+        for part_eid in assembly.parts:
+            if part_eid not in sensors or part_eid not in identities:
+                continue
+            pi  = identities[part_eid]
+            vel = velocities.get(assembly_eid)
+            if vel is None:
+                continue
+            if "vx" in pi.port_values: pi.port_values["vx"] = vel.x
+            if "vy" in pi.port_values: pi.port_values["vy"] = vel.y
+
+    def _update_angular_velocity_sensors(self, assembly_eid, assembly, identities, sensors, ang_vels):
+        for part_eid in assembly.parts:
+            if part_eid not in sensors or part_eid not in identities:
+                continue
+            pi  = identities[part_eid]
+            av  = ang_vels.get(assembly_eid)
+            if av is None:
+                continue
+            if "omega" in pi.port_values:
+                pi.port_values["omega"] = av.z
+
+    def _update_ansibles(self, assembly, identities, ansibles, world):
+        for part_eid in assembly.parts:
+            if part_eid not in ansibles or part_eid not in identities:
+                continue
+            ab = ansibles[part_eid]
+            pi = identities[part_eid]
+
+            # receive: network -> port
+            for msg_key, port_name in ab.receive.items():
+                value = world.message_network.read(msg_key)
+                if port_name in pi.port_values:
+                    pi.port_values[port_name] = value
+
+            # transmit: port -> network
+            for port_name, msg_key in ab.transmit.items():
+                value = pi.port_values.get(port_name)
+                if value is not None:
+                    world.message_network.write(msg_key, value)
+
 
     def _run_scripts(self, assembly_eid, assembly, identities, scripts, world, dt):
         for part_eid in assembly.parts:
@@ -175,16 +252,32 @@ class AssemblySystem(System):
             pi = identities[part_eid]
             for entry in sb.callables:
                 entry[2] += dt
-                fn, period, time_elapsed = entry
-                
+                fn, period, time_elapsed, threaded = entry
+
                 if time_elapsed >= period:
                     entry[2] = 0.0
-                    outputs = fn(world, dt)
+                    ports = Ports(pi)
 
-                    if outputs:
-                        for port_name, value in outputs.items():
-                            if port_name in pi.port_values:
-                                pi.port_values[port_name] = value
+                    if threaded:
+                        def _run(fn=fn, ports=ports, budget=period):
+                            t = time.perf_counter()
+                            try:
+                                fn(ports, dt)
+                            except Exception as e:
+                                print(f"WARNING: script exception in assembly {assembly_eid}: {e}")
+                            elapsed = time.perf_counter() - t
+                            if elapsed > budget:
+                                print(f"WARNING: script in assembly {assembly_eid} took {elapsed:.3f}s (budget {budget:.3f}s)")
+                        threading.Thread(target=_run, daemon=True).start()
+                    else:
+                        t = time.perf_counter()
+                        try:
+                            fn(ports, dt)
+                        except Exception as e:
+                            print(f"WARNING: script exception in assembly {assembly_eid}: {e}")
+                        elapsed = time.perf_counter() - t
+                        if elapsed > period:
+                            print(f"WARNING: script in assembly {assembly_eid} took {elapsed:.3f}s (budget {period:.3f}s)")
 
 
     def _propagate_data(self, assembly:   Assembly,
