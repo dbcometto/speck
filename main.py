@@ -1,76 +1,21 @@
 """Run Speck"""
-import pyglet
-import time
-
-from speck.core import World
-from speck.renderer.windows import ViewportWindow, InspectorWindow
-from speck.systems.dynamics import ResetAccelerationSystem, ResetAngularAccelerationSystem, GravitySystem, MovementSystem, AttitudeSystem
-from speck.systems.assemblies import AssemblySystem
-
-from speck.scenarios.base_scenarios import generate_scene_smallbody, generate_scene_2smallbody
-from speck.scenarios.agent_scenarios import (
-    generate_scene_emptythruster, generate_scene_emptythrusterrcs, 
-    generate_scene_ansible_test, generate_scene_ansible_test2, generate_scene_navigator, 
-    generate_scene_thread_test, generate_scene_mpc_navigator, generate_scene_identity_test,
-    generate_scene_follower_test, 
-)
-
-from speck.ssh import start_ssh_server
-
-
-
-
-# Config
-dt = 1/60
-timewarp = 1
-
-
-# Create a world
-world = World(timewarp=timewarp, debug_prints=False)
-
-# Systems in order
-world.add_system(ResetAccelerationSystem())
-world.add_system(ResetAngularAccelerationSystem())
-world.add_system(GravitySystem())
-world.add_system(AssemblySystem())
-world.add_system(MovementSystem())
-world.add_system(AttitudeSystem())
-
-# Populate the world
-# generate_scene_smallbody(world)
-# generate_scene_2smallbody(world)
-# generate_scene_emptythrusterrcs(world)
-# generate_scene_ansible_test(world)
-# generate_scene_ansible_test2(world)
-# generate_scene_navigator(world)
-# generate_scene_thread_test(world)
-# generate_scene_mpc_navigator(world)
-# generate_scene_identity_test(world)
-generate_scene_follower_test(world)
-
-# Set up rendering
-windows = []
-
-
+import multiprocessing
+from speck.core.sim import run_sim
+from speck.core.render import run_render
 
 if __name__ == '__main__':
-    start_ssh_server(world)
+    snapshot_queue = multiprocessing.Queue(maxsize=10)
+    command_queue  = multiprocessing.Queue()
+    render_conn, sim_conn = multiprocessing.Pipe(duplex=True)
 
-    main_window = ViewportWindow(world, windows, width=1800, height=900)
-    # main_window2 = ViewportWindow(world, windows, width=1800, height=900)
-    
-    def update(dt):
-        world.update(dt)
-        main_window.hud.update_ups(dt)
-    
-    pyglet.clock.schedule_interval(update, dt)
+    sim_process = multiprocessing.Process(
+        target=run_sim,
+        args=(snapshot_queue, command_queue, sim_conn),
+        daemon=True
+    )
+    sim_process.start()
 
-    try:
-        pyglet.app.run()
-    except KeyboardInterrupt:
-        pass
-    except Exception as e:
-        raise
-    finally:
-        print("Shutting down")
-        pyglet.app.exit()
+    run_render(snapshot_queue, command_queue, render_conn)
+
+    sim_process.terminate()
+    sim_process.join()

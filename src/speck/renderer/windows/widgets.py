@@ -14,7 +14,7 @@ from ...components.dynamics import Position
 from ...components.assemblies import Assembly, PORT_TYPE, PORT_DIRECTION
 from ...components.rendering import RenderData
 from ...utils import _hex_to_rgb
-from ...config import SELECTED_COLOR, GRAY_COLOR, OTHER_COLOR, DARK_GRAY_COLOR, ZOOM_FACTOR, MINIMAP_FOCUS_COLOR
+from ...config import SELECTED_COLOR, GRAY_COLOR, OTHER_COLOR, DARK_GRAY_COLOR, ZOOM_FACTOR, MINIMAP_FOCUS_COLOR, ACCENT_COLOR
 
 
 
@@ -370,30 +370,28 @@ class PanelWidget(Widget):
 
 
 class SelectionPanelWidget(PanelWidget):
-    """Shows info about the selected entity"""
-    def __init__(self, world: World, input_handler, left_offset = 0, parent_width: int = 800, parent_height: int = 600) -> None:
+    def __init__(self, input_handler, left_offset=0,
+                 parent_width: int = 800, parent_height: int = 600) -> None:
         super().__init__(x=0, y=0, width=200, height=100,
                          layout="vertical", gap=2, padding=6)
-        self.world = world
         self.input_handler = input_handler
         self.left_offset = left_offset
         self._built_for_eid: int | None = None
         self._parent_width = parent_width
         self._parent_height = parent_height
-        self._reposition_to_corner()
+        self._snapshot_entities = {}
 
-
+    def set_snapshot(self, snapshot: dict) -> None:
+        self._snapshot_entities = snapshot.get("entities", {})
 
     def _build(self, eid: int) -> None:
         self.children.clear()
         self._built_for_eid = eid
-
         self.add(TextWidget(
             x=0, y=0, width=self.width - self.padding * 2, height=30,
             text=f"Entity {eid}",
             font_size=12
         ))
-
         total_height = self.padding * 2
         for child in self.children:
             total_height += child.height + self.gap
@@ -403,7 +401,7 @@ class SelectionPanelWidget(PanelWidget):
         self._reposition_to_corner()
 
     def _reposition_to_corner(self) -> None:
-        self.x = self.left_offset + 10  # left side
+        self.x = self.left_offset + 10
         self.y = 10
         self._on_reposition()
 
@@ -437,53 +435,41 @@ class SelectionPanelWidget(PanelWidget):
 
 
 class ActionBarWidget(PanelWidget):
-    """Shows actions for the selected entity"""
-    def __init__(self, world: World, input_handler, 
-                 on_minimap_follow: Callable, left_offset = 0,
+    def __init__(self, input_handler,
+                 on_minimap_follow: Callable, left_offset=0,
                  parent_width: int = 800, parent_height: int = 600) -> None:
         super().__init__(x=0, y=0, width=0, height=40,
                          layout="horizontal", gap=4, padding=4, alpha=0)
-        self.world = world
         self.input_handler = input_handler
         self.on_minimap_follow = on_minimap_follow
         self.left_offset = left_offset
-
         self._built_for_eid: int | None = None
         self._parent_width = parent_width
         self._parent_height = parent_height
+        self._snapshot_entities = {}
+
+    def set_snapshot(self, snapshot: dict) -> None:
+        self._snapshot_entities = snapshot.get("entities", {})
 
     def _default_actions(self, eid: int) -> list[tuple[str, Callable]]:
         actions = [
-            ("[f] Follow", lambda: self.input_handler.set_follower(eid)),
+            ("[f] Follow",  lambda: self.input_handler.set_follower(eid)),
             ("[i] Inspect", lambda: self.input_handler.open_inspector(eid)),
             ("[m] Minimap", lambda: self.on_minimap_follow(eid)),
         ]
-
-        if eid in self.world.get_component(Assembly):
+        e = self._snapshot_entities.get(eid, {})
+        if e.get("has_assembly"):
             actions.append(("[g] Graph", lambda: self.input_handler.open_graph(eid)))
-
         return actions
 
     def _build(self, eid: int) -> None:
         self.children.clear()
         self._built_for_eid = eid
-
-        actions = self._default_actions(eid)
-
-        # TODO: add script actions here
-        # script = self.world.get_component(ScriptComponent).get(eid)
-        # if script:
-        #     actions += script.actions
-
-        for text, action in actions:
+        for text, action in self._default_actions(eid):
             self.add(TextButtonWidget(
                 x=0, y=0, width=90, height=30,
-                text=text,
-                font_size=10,
-                action=action
+                text=text, font_size=10, action=action
             ))
-
-        # auto-resize width
         total_width = self.padding * 2
         for child in self.children:
             total_width += child.width + self.gap
@@ -493,7 +479,7 @@ class ActionBarWidget(PanelWidget):
         self._reposition()
 
     def _reposition(self) -> None:
-        self.x = self.left_offset + 210  # right of selection panel
+        self.x = self.left_offset + 210
         self.y = 10
         self._on_reposition()
 
@@ -530,17 +516,14 @@ class ActionBarWidget(PanelWidget):
 
 
 class MinimapWidget(Widget):
-    def __init__(self, world: World, x: int, y: int, width: int, height: int,
-                 main_camera: Camera,
-                 view_range: float = 1000.0,
-                 anchor_top: bool = False, anchor_right: bool = False,
-                 anchor_bottom: bool = False, anchor_left: bool = False,
-                 padding = 10, border = 3,
-                 alpha = 1):
-        from .viewport.camera import Camera
-
+    def __init__(self, main_camera: Camera,
+             x: int, y: int, width: int, height: int,
+             view_range: float = 1000.0,
+             anchor_top: bool = False, anchor_right: bool = False,
+             anchor_bottom: bool = False, anchor_left: bool = False,
+             padding=10, border=3, alpha=1,
+             minimap_camera=None):  # passed in, not created here
         super().__init__(x, y, width, height, anchor_top, anchor_right, anchor_bottom, anchor_left)
-        self.world = world
         self.main_camera = main_camera
         self._background: pyglet.shapes.Rectangle | None = None
         self._border: pyglet.shapes.Rectangle | None = None
@@ -550,18 +533,19 @@ class MinimapWidget(Widget):
         self._pressed = False
         self._is_dragging = False
         self.alpha = alpha
-
+        self._snapshot_entities = {}
         self._follow_eid: int | None = None
 
-        # Minimap camera
-        self.camera = Camera(width, height)
+        self.camera = minimap_camera  # assigned, not instantiated
         self.camera.zoom = min(
-            (width - self._padding * 2) / (view_range * 2),
-            (height - self._padding * 2) / (view_range * 2)
+            (width - padding * 2) / (view_range * 2),
+            (height - padding * 2) / (view_range * 2)
         )
 
+    def set_snapshot(self, snapshot: dict) -> None:
+        self._snapshot_entities = snapshot.get("entities", {})
+
     def _world_to_minimap(self, wx, wy) -> tuple[float, float]:
-        """Convert world coords to minimap screen coords"""
         sx = (wx - self.camera.x) * self.camera.zoom + self.x + self.width / 2
         sy = (wy - self.camera.y) * self.camera.zoom + self.y + self.height / 2
         return sx, sy
@@ -573,103 +557,57 @@ class MinimapWidget(Widget):
         return False
 
     def draw(self, batch: pyglet.graphics.Batch) -> None:
-        # Update minimap camera position
-        if self._follow_eid is not None:
-            positions = self.world.get_component(Position)
-            if self._follow_eid in positions:
-                pos = positions[self._follow_eid]
-                self.camera.x = pos.x
-                self.camera.y = pos.y
+        if self._follow_eid is not None and self._follow_eid in self._snapshot_entities:
+            e = self._snapshot_entities[self._follow_eid]
+            self.camera.x = e["x"]
+            self.camera.y = e["y"]
         else:
             self.camera.x = 0.0
             self.camera.y = 0.0
 
-        # Draw background and border
         if self._background is None:
             self._background = pyglet.shapes.Rectangle(
-                x=self.x, y=self.y,
-                width=self.width, height=self.height,
-                color=_hex_to_rgb(DARK_GRAY_COLOR, self.alpha),
-                batch=batch
-            )
+                x=self.x, y=self.y, width=self.width, height=self.height,
+                color=_hex_to_rgb(DARK_GRAY_COLOR, self.alpha), batch=batch)
         else:
             self._background.batch = batch
 
         if self._border is None:
             self._border = pyglet.shapes.Box(
-            x=self.x, y=self.y,
-            width=self.width, height=self.height,
-            thickness=self.border,
-            color=_hex_to_rgb(GRAY_COLOR,self.alpha),
-            batch=batch
-        )
+                x=self.x, y=self.y, width=self.width, height=self.height,
+                thickness=self.border, color=_hex_to_rgb(GRAY_COLOR, self.alpha), batch=batch)
         else:
             self._border.batch = batch
 
-        
-
-
-
-        # Draw entities
-        positions = self.world.get_component(Position)
-
-        if not positions:
-            return
-
         self._shapes = []
-        for eid, pos in positions.items():
-            mx, my = self._world_to_minimap(pos.x, pos.y)
-            # cull outside minimap bounds
-            if mx < self.x + self.border or mx > self.x + self.width - self.border or my < self.y + self.border or my > self.y + self.height - self.border:
+        for eid, e in self._snapshot_entities.items():
+            mx, my = self._world_to_minimap(e["x"], e["y"])
+            if mx < self.x + self.border or mx > self.x + self.width - self.border or \
+               my < self.y + self.border or my > self.y + self.height - self.border:
                 continue
             color = MINIMAP_FOCUS_COLOR if eid == self._follow_eid else OTHER_COLOR
-            tuple_color = _hex_to_rgb(color,self.alpha)
             self._shapes.append(pyglet.shapes.Circle(
                 x=mx, y=my, radius=2,
-                color=tuple_color,
-                batch=batch
-            ))
+                color=_hex_to_rgb(color, self.alpha), batch=batch))
 
-
-
-        # Draw main camera viewport indicator
+        # Viewport indicator
         half_w = self.main_camera.width / 2 / self.main_camera.zoom
         half_h = self.main_camera.height / 2 / self.main_camera.zoom
-
-        # corners of main viewport in world space
         center_x = self.main_camera.x + self.main_camera.origin_x
         center_y = self.main_camera.y + self.main_camera.origin_y
 
-        left   = center_x - half_w
-        right  = center_x + half_w
-        bottom = center_y - half_h
-        top    = center_y + half_h
-
-        # convert to minimap space
-        mx1, my1 = self._world_to_minimap(left, bottom)
-        mx2, my2 = self._world_to_minimap(right, top)
-
-        # clamp to minimap bounds
+        mx1, my1 = self._world_to_minimap(center_x - half_w, center_y - half_h)
+        mx2, my2 = self._world_to_minimap(center_x + half_w, center_y + half_h)
         mx1 = max(mx1, self.x + self.border)
         my1 = max(my1, self.y + self.border)
         mx2 = min(mx2, self.x + self.width - self.border)
         my2 = min(my2, self.y + self.height - self.border)
-
         box_w = mx2 - mx1
         box_h = my2 - my1
-
         if box_w > 0 and box_h > 0:
             self._shapes.append(pyglet.shapes.Box(
-                x=mx1, y=my1,
-                width=box_w,
-                height=box_h,
-                thickness=1,
-                color=_hex_to_rgb(SELECTED_COLOR, self.alpha),
-                batch=batch
-            ))
-
-
-
+                x=mx1, y=my1, width=box_w, height=box_h,
+                thickness=1, color=_hex_to_rgb(SELECTED_COLOR, self.alpha), batch=batch))
 
     def _on_reposition(self) -> None:
         self.camera.width = self.width
@@ -685,27 +623,22 @@ class MinimapWidget(Widget):
             self._border.width = self.width
             self._border.height = self.height
 
-    def on_resize(self, width: int, height: int) -> None:
+    def on_resize(self, width, height) -> None:
         super().on_resize(width, height)
 
     def on_mouse_press(self, x, y, button, modifiers) -> bool:
         if self.hit_test(x, y) and button == pyglet.window.mouse.LEFT:
             self._pressed = True
-            self._is_dragging = False
-
             wx = (x - self.x - self.width / 2) / self.camera.zoom + self.camera.x
             wy = (y - self.y - self.height / 2) / self.camera.zoom + self.camera.y
             self.main_camera.x = wx
             self.main_camera.y = wy
-            
             return True
         self._pressed = False
         return False
 
     def on_mouse_release(self, x, y, button, modifiers) -> bool:
         if self.hit_test(x, y) and button == pyglet.window.mouse.LEFT:
-            if not self._is_dragging and self._pressed:
-                self._is_dragging = False
             self._pressed = False
         return False
 
@@ -821,103 +754,81 @@ class IconStripWidget(PanelWidget):
 
 
 class EntityListPanelWidget(PanelWidget):
-    """A scrollable list of all entities"""
-    def __init__(self, world: World, input_handler, x: int, y: int, 
-                 width: int, height: int, 
-                 bottom_offset = 0, content_padding = 4) -> None:
+    def __init__(self, input_handler, x: int, y: int,
+                 width: int, height: int,
+                 bottom_offset=0, content_padding=4) -> None:
         super().__init__(x, y, width, height,
-                         color=GRAY_COLOR,
-                         layout="absolute", gap=0, padding=0)
-        self.world = world
+                         color=GRAY_COLOR, layout="absolute", gap=0, padding=0)
         self.input_handler = input_handler
         self._scroll_offset = 0
         self._row_height = 22
         self._labels: list = []
-        self._buttons: list = []
-        self._header: pyglet.text.Label | None = None
         self.bottom_offset = bottom_offset
-        self.content_padding = 4
+        self.content_padding = content_padding
+        self._snapshot_entities = {}
+
+    def set_snapshot(self, snapshot: dict) -> None:
+        self._snapshot_entities = snapshot.get("entities", {})
 
     def _get_entities(self) -> list[int]:
-        positions = self.world.get_component(Position)
-        return list(positions.keys())
+        return list(self._snapshot_entities.keys())
 
     def draw(self, batch: pyglet.graphics.Batch) -> None:
         super().draw(batch)
 
-        # Header
-        self._header = pyglet.text.Label(
+        self._labels = []
+        self._labels.append(pyglet.text.Label(
             text="Entities",
             x=self.x + 6, y=self.y + self.height - 20,
-            font_name="Consolas",
-            font_size=11,
-            color=_hex_to_rgb(SELECTED_COLOR),
-            batch=batch
-        )
+            font_name="Consolas", font_size=11,
+            color=_hex_to_rgb(SELECTED_COLOR), batch=batch
+        ))
 
-        # Entity rows
         entities = self._get_entities()
         total = len(entities)
-
         content_y = self.y + self.content_padding
-        content_height = self.height - 30 - self.content_padding*2
-
+        content_height = self.height - 30 - self.content_padding * 2
         visible_rows = max(0, content_height // self._row_height)
         max_offset = max(0, total - visible_rows)
         self._scroll_offset = min(self._scroll_offset, max_offset)
-
         visible = entities[self._scroll_offset:self._scroll_offset + visible_rows]
 
-        self._labels = []
-        self._buttons = []
         for i, eid in enumerate(visible):
             y = content_y + content_height - (i + 1) * self._row_height
+            e = self._snapshot_entities.get(eid, {})
+            name = e.get("name", "")
             color = SELECTED_COLOR if eid == self.input_handler.selected_eid else OTHER_COLOR
+            label = f"[{eid}] {name}" if name else f"[{eid}]"
             self._labels.append(pyglet.text.Label(
-                text=f"[{eid}]",
+                text=label,
                 x=self.x + 6, y=y + (self._row_height - 11) // 2,
-                font_name="Consolas",
-                font_size=11,
-                color=_hex_to_rgb(color),
-                batch=batch
+                font_name="Consolas", font_size=11,
+                color=_hex_to_rgb(color), batch=batch
             ))
 
-        # Scrollbar
         if total > visible_rows and content_height > 0 and visible_rows > 0:
-            scrollbar_height = content_height
             scrollbar_x = self.x + self.width - 6
             thumb_ratio = visible_rows / total
-            thumb_height = max(10, int(scrollbar_height * thumb_ratio))
-            
+            thumb_height = max(10, int(content_height * thumb_ratio))
             scroll_ratio = self._scroll_offset / max(1, total - visible_rows)
-            thumb_y = content_y + int((scrollbar_height - thumb_height) * (1 - scroll_ratio))
+            thumb_y = content_y + int((content_height - thumb_height) * (1 - scroll_ratio))
 
-
-            # track
             self._labels.append(pyglet.shapes.Rectangle(
                 x=scrollbar_x, y=content_y,
-                width=4, height=scrollbar_height,
-                color=_hex_to_rgb(DARK_GRAY_COLOR),
-                batch=batch
-            ))
-
-            # thumb
+                width=4, height=content_height,
+                color=_hex_to_rgb(DARK_GRAY_COLOR), batch=batch))
             self._labels.append(pyglet.shapes.Rectangle(
                 x=scrollbar_x, y=thumb_y,
                 width=4, height=thumb_height,
-                color=_hex_to_rgb(SELECTED_COLOR),
-                batch=batch
-            ))
+                color=_hex_to_rgb(SELECTED_COLOR), batch=batch))
 
     def on_mouse_press(self, x, y, button, modifiers) -> bool:
         if not self.hit_test(x, y):
             return False
         entities = self._get_entities()
-        
         content_y = self.y + self.content_padding
         content_height = self.height - 30 - self.content_padding * 2
         visible_rows = content_height // self._row_height
-        
         visible = entities[self._scroll_offset:self._scroll_offset + visible_rows]
         for i, eid in enumerate(visible):
             row_y = content_y + content_height - (i + 1) * self._row_height
@@ -939,17 +850,104 @@ class EntityListPanelWidget(PanelWidget):
 
 
 
+class IconStripWidget(PanelWidget):
+    def __init__(self, x: int, y: int, width: int, height: int,
+                 anchor_top: bool = False, anchor_right: bool = False,
+                 anchor_bottom: bool = False, anchor_left: bool = False,
+                 bottom_offset=0) -> None:
+        super().__init__(x, y, width, height,
+                         color=DARK_GRAY_COLOR,
+                         layout="vertical", gap=2, padding=2,
+                         anchor_top=anchor_top, anchor_right=anchor_right,
+                         anchor_bottom=anchor_bottom, anchor_left=anchor_left)
+        self._panels: dict[str, PanelWidget] = {}
+        self._panel_visible: dict[str, bool] = {}
+        self.bottom_offset = bottom_offset
+
+    def set_snapshot(self, snapshot: dict) -> None:
+        for panel in self._panels.values():
+            if hasattr(panel, "set_snapshot"):
+                panel.set_snapshot(snapshot)
+
+    def add_panel(self, key: str, label: str, panel: PanelWidget) -> None:
+        self._panels[key] = panel
+        self._panel_visible[key] = False
+        self.add(TextButtonWidget(
+            x=0, y=0,
+            width=self.width - self.padding * 2,
+            height=self.width - self.padding * 2,
+            text=label,
+            action=lambda k=key: self._toggle(k),
+            active=lambda k=key: self._panel_visible[k]
+        ))
+
+    def _toggle(self, key: str) -> None:
+        self._panel_visible[key] = not self._panel_visible[key]
+        self._panels[key].visible = self._panel_visible[key]
+
+    def hit_test(self, x: int, y: int) -> bool:
+        if super().hit_test(x, y):
+            return True
+        for key, panel in self._panels.items():
+            if self._panel_visible[key] and panel.hit_test(x, y):
+                return True
+        return False
+
+    def draw(self, batch: pyglet.graphics.Batch) -> None:
+        super().draw(batch)
+        for key, panel in self._panels.items():
+            if self._panel_visible[key]:
+                panel.draw(batch)
+
+    def on_mouse_press(self, x, y, button, modifiers) -> bool:
+        for key, panel in self._panels.items():
+            if self._panel_visible[key] and panel.hit_test(x, y):
+                return panel.on_mouse_press(x, y, button, modifiers)
+        return super().on_mouse_press(x, y, button, modifiers)
+
+    def on_mouse_release(self, x, y, button, modifiers) -> bool:
+        for key, panel in self._panels.items():
+            if self._panel_visible[key]:
+                panel.on_mouse_release(x, y, button, modifiers)
+        return super().on_mouse_release(x, y, button, modifiers)
+
+    def on_mouse_motion(self, x, y, dx, dy) -> bool:
+        for key, panel in self._panels.items():
+            if self._panel_visible[key]:
+                panel.on_mouse_motion(x, y, dx, dy)
+        return super().on_mouse_motion(x, y, dx, dy)
+
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y) -> bool:
+        for key, panel in self._panels.items():
+            if self._panel_visible[key] and panel.hit_test(x, y):
+                return panel.on_mouse_scroll(x, y, scroll_x, scroll_y)
+        return False
+
+    def on_resize(self, width, height) -> None:
+        super().on_resize(width, height)
+        for panel in self._panels.values():
+            panel.x = self.x + self.width
+            panel.y = self.y + self.bottom_offset
+            panel.height = self.height - self.bottom_offset
+            try:
+                panel.bottom_offset = self.bottom_offset
+            except:
+                pass
+            panel._on_reposition()
+
+
+
+
 
 
 class ComponentInspectorWidget(Widget):
-    def __init__(self, x, y, width, height, world, eid,
+    def __init__(self, x, y, width, height,
+                 data: dict | None = None,
                  anchor_top=False, anchor_right=False,
                  anchor_bottom=False, anchor_left=False,
-                 max_col_width = 150, min_col_width = 10,
-                 order: list[type] | None = None):
+                 max_col_width=200, min_col_width=10):
         super().__init__(x, y, width, height, anchor_top, anchor_right, anchor_bottom, anchor_left)
-        self.world = world
-        self.eid = eid
+        self._data = data or {}
         self._scroll_offset = 0
         self._row_height = 18
         self._char_width = 7
@@ -958,7 +956,19 @@ class ComponentInspectorWidget(Widget):
         self._labels = []
         self.max_col_width = max_col_width
         self.min_col_width = min_col_width
-        self.order = order
+
+        self._dragging_scrollbar = False
+        self._drag_start_y = 0
+        self._drag_start_offset = 0
+        self._last_total_rows = 0
+        self._last_visible_rows = 0
+        self._last_max_offset = 0
+        self._thumb_y = 0
+        self._thumb_height = 0
+
+    def set_data(self, data: dict) -> None:
+        # preserve scroll offset across updates
+        self._data = data
 
     def on_mouse_scroll(self, x, y, scroll_x, scroll_y) -> bool:
         if self.hit_test(x, y):
@@ -966,11 +976,10 @@ class ComponentInspectorWidget(Widget):
             return True
         return False
 
-    def _format_field(self, comp, field, value) -> str:
-        unit = getattr(comp.__class__, 'units', {}).get(field, "")
+    def _format_field(self, field, value) -> str:
         if isinstance(value, float):
-            return f"{field}: {value:.3f}{unit}"
-        return f"{field}: {value}"
+            return f"{value:.3f}"
+        return str(value)
 
     def _wrap_text(self, text: str, max_width: int) -> list[str]:
         max_chars = max(1, max_width // self._char_width)
@@ -987,67 +996,42 @@ class ComponentInspectorWidget(Widget):
 
     def _build_blocks(self) -> list:
         blocks = []
-        
-        # build in specified order first
-        if self.order:
-            for comp_type in self.order:
-                store = self.world.components.get(comp_type, {})
-                if self.eid in store:
-                    comp = store[self.eid]
-                    block = [(comp_type.__name__, OTHER_COLOR)]
-                    for field, value in comp.__dict__.items():
-                        text = f"  {self._format_field(comp, field, value)}"
-                        for line in self._wrap_text(text, self.max_col_width):
-                            block.append((line, GRAY_COLOR))
-                    blocks.append(block)
-
-        # then any remaining components not in order
-        for comp_type, store in self.world.components.items():
-            if comp_type in (self.order or []):
-                continue
-            if self.eid in store:
-                comp = store[self.eid]
-                block = [(comp_type.__name__, OTHER_COLOR)]
-                for field, value in comp.__dict__.items():
-                    text = f"  {self._format_field(comp, field, value)}"
-                    for line in self._wrap_text(text, self.max_col_width):
+        for comp_name, fields in self._data.items():
+            block = [(comp_name, OTHER_COLOR)]
+            if isinstance(fields, dict):
+                for field, value in fields.items():
+                    formatted = self._format_field(field, value)
+                    for line in self._wrap_text(f"  {field}:", self.max_col_width):
+                        block.append((line, ACCENT_COLOR))
+                    for line in self._wrap_text(f"    {formatted}", self.max_col_width):
                         block.append((line, GRAY_COLOR))
-                blocks.append(block)
-
+            blocks.append(block)
         return blocks
 
     def _arrange_blocks(self, blocks, content_width) -> tuple[list, int]:
         if not blocks:
             return [], content_width
 
-        max_field_width = max(
-            max(len(line[0]) * self._char_width + self._padding for line in block)
-            for block in blocks
-        )
-        clamped_width = max(self.min_col_width,
-                            min(max_field_width, self.max_col_width))
-        cols = max(1, content_width // clamped_width)
+        # use fixed column width based on max_col_width
+        col_width = min(self.max_col_width, content_width)
+        cols = max(1, content_width // col_width)
         col_width = content_width // cols
 
-        # fill columns top to bottom in order
         total_lines = sum(len(block) for block in blocks)
         target_height = (total_lines + cols - 1) // cols
 
         col_blocks = [[] for _ in range(cols)]
-        total_lines = sum(len(block) for block in blocks)
-        target_height = (total_lines + cols - 1) // cols
-
         current_col = 0
         current_height = 0
 
         for block in blocks:
-            if current_height + len(block) > target_height and current_col < cols - 1:
+            # don't start a new column unless current one has content
+            if current_height > 0 and current_height + len(block) > target_height and current_col < cols - 1:
                 current_col += 1
                 current_height = 0
             col_blocks[current_col].append(block)
             current_height += len(block)
 
-        # flatten columns to lines
         col_lines = []
         for col in col_blocks:
             lines = []
@@ -1080,6 +1064,8 @@ class ComponentInspectorWidget(Widget):
         max_offset = max(0, total_rows - visible_rows)
         self._scroll_offset = min(self._scroll_offset, max_offset)
 
+        # print(f"total_rows={total_rows}, visible_rows={visible_rows}, height={self.height}, row_height={self._row_height}, x={self.x}, width={self.width}, scrollbar_x={self.x + self.width - self._scrollbar_width}")
+
         y = self.y + self.height
         for i in range(self._scroll_offset, min(self._scroll_offset + visible_rows, total_rows)):
             y -= self._row_height
@@ -1089,33 +1075,82 @@ class ComponentInspectorWidget(Widget):
                         text=text,
                         x=self.x + self._padding + j * col_width, y=y,
                         font_name="Consolas", font_size=10,
-                        color=_hex_to_rgb(color),
-                        batch=batch
+                        color=_hex_to_rgb(color), batch=batch
                     ))
 
+        # scrollbar — always draw if content overflows
         if total_rows > visible_rows:
             scrollbar_x = self.x + self.width - self._scrollbar_width
             track_height = self.height
-            thumb_height = max(20, track_height * visible_rows // total_rows)
+            thumb_height = max(20, track_height * visible_rows // max(1, total_rows))
             thumb_y = self.y + track_height - int(
                 (track_height - thumb_height) * self._scroll_offset / max(1, max_offset)
             ) - thumb_height
 
+            # store for hit testing
+            self._last_total_rows   = total_rows
+            self._last_visible_rows = visible_rows
+            self._last_max_offset   = max_offset
+            self._thumb_y           = thumb_y
+            self._thumb_height      = thumb_height
+            self._scrollbar_x       = scrollbar_x
+
+            # track
             self._labels.append(pyglet.shapes.Rectangle(
                 x=scrollbar_x, y=self.y,
                 width=self._scrollbar_width, height=track_height,
-                color=_hex_to_rgb(DARK_GRAY_COLOR),
-                batch=batch
-            ))
+                color=_hex_to_rgb("#111111"), batch=batch))
+
+            # thumb
             self._labels.append(pyglet.shapes.Rectangle(
                 x=scrollbar_x, y=thumb_y,
                 width=self._scrollbar_width, height=thumb_height,
-                color=_hex_to_rgb(GRAY_COLOR),
-                batch=batch
-            ))
+                color=_hex_to_rgb(GRAY_COLOR), batch=batch))
 
     def _on_reposition(self) -> None:
         self._labels = []
+
+    def _scrollbar_hit_test(self, x, y) -> bool:
+        if not hasattr(self, '_scrollbar_x'):
+            return False
+        return (self._scrollbar_x <= x <= self._scrollbar_x + self._scrollbar_width
+                and self.y <= y <= self.y + self.height)
+
+    def _thumb_hit_test(self, x, y) -> bool:
+        if not hasattr(self, '_scrollbar_x'):
+            return False
+        return (self._scrollbar_x <= x <= self._scrollbar_x + self._scrollbar_width
+                and self._thumb_y <= y <= self._thumb_y + self._thumb_height)
+
+    def on_mouse_press(self, x, y, button, modifiers) -> bool:
+        if button == pyglet.window.mouse.LEFT:
+            if self._thumb_hit_test(x, y):
+                self._dragging_scrollbar = True
+                self._drag_start_y = y
+                self._drag_start_offset = self._scroll_offset
+                return True
+            elif self._scrollbar_hit_test(x, y):
+                # click on track — jump to position
+                if self._last_total_rows > self._last_visible_rows:
+                    ratio = 1.0 - (y - self.y) / self.height
+                    self._scroll_offset = int(ratio * self._last_max_offset)
+                    self._scroll_offset = max(0, min(self._last_max_offset, self._scroll_offset))
+                return True
+        return False
+
+    def on_mouse_release(self, x, y, button, modifiers) -> bool:
+        self._dragging_scrollbar = False
+        return False
+
+    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers) -> bool:
+        if self._dragging_scrollbar and self._last_max_offset > 0:
+            drag_ratio = -dy / self.height
+            delta = int(drag_ratio * self._last_total_rows)
+            self._scroll_offset = max(0, min(self._last_max_offset, self._drag_start_offset + delta))
+            self._drag_start_offset = self._scroll_offset
+            self._drag_start_y = y
+            return True
+        return False
 
 
 
@@ -1319,19 +1354,19 @@ class FlowgraphCanvasWidget(Widget):
                 if pa and pb:
                     self.edges.append((a, pa, b, pb))
 
-    def write_back(self, assembly: Assembly):
-        assembly.edges = [(a.part_eid, pa[0], b.part_eid, pb[0])
-                          for a, pa, b, pb in self.edges]
+    # def write_back(self, assembly: Assembly):
+    #     assembly.edges = [(a.part_eid, pa[0], b.part_eid, pb[0])
+    #                       for a, pa, b, pb in self.edges]
         
-    def save_layout(self, assembly_eid: int, world: World):
-        from ...components.assemblies import FlowgraphLayout
-        layouts = world.get_component(FlowgraphLayout)
-        if assembly_eid not in layouts:
-            world.add_component(assembly_eid, FlowgraphLayout())
-            layouts = world.get_component(FlowgraphLayout)
+    # def save_layout(self, assembly_eid: int, world: World):
+    #     from ...components.assemblies import FlowgraphLayout
+    #     layouts = world.get_component(FlowgraphLayout)
+    #     if assembly_eid not in layouts:
+    #         world.add_component(assembly_eid, FlowgraphLayout())
+    #         layouts = world.get_component(FlowgraphLayout)
 
-        layouts[assembly_eid].positions = {n.part_eid: (n.x, n.y) for n in self.nodes}
-        layouts[assembly_eid].flipped   = {n.part_eid: n.flipped for n in self.nodes}
+    #     layouts[assembly_eid].positions = {n.part_eid: (n.x, n.y) for n in self.nodes}
+    #     layouts[assembly_eid].flipped   = {n.part_eid: n.flipped for n in self.nodes}
 
     def _port_direction(self, node, port):
         on_right = (port[2] == PORT_DIRECTION.OUT) ^ node.flipped
@@ -1400,6 +1435,7 @@ class FlowgraphCanvasWidget(Widget):
         if not self.hit_test(x, y):
             return False
         
+        wx, wy = self._to_world(x, y)
 
         if button == pyglet.window.mouse.LEFT:
             # buttons are screen-space — check before world conversion
@@ -1408,7 +1444,7 @@ class FlowgraphCanvasWidget(Widget):
                     if btn.on_mouse_press(x, y, button, modifiers):
                         return True
 
-            wx, wy = self._to_world(x, y)
+            
             for node in reversed(self.nodes):
                 port = node.port_at(wx, wy, self._cam_zoom)
                 if port:
@@ -1484,6 +1520,71 @@ class FlowgraphCanvasWidget(Widget):
 
     def _on_reposition(self):
         pass
+
+    def load_from_data(self, data: dict) -> None:
+        self.nodes.clear()
+        self.edges.clear()
+
+        parts     = data.get("parts", {})
+        edges     = data.get("edges", [])
+        positions = data.get("layout_positions", {})
+        flipped   = data.get("layout_flipped", {})
+
+        # categorize by name
+        sensors   = []
+        computers = []
+        actuators = []
+        other     = []
+
+        SENSOR_NAMES   = {"PositionSensor", "HeadingSensor", "VelocitySensor",
+                        "AngularVelocitySensor", "IdentitySensor", "EntityStateSensor",
+                        "Ansible"}
+        ACTUATOR_NAMES = {"Thruster", "AttitudeController"}
+        COMPUTER_NAMES = {"Computer"}
+
+        for part_eid, part_data in parts.items():
+            name = part_data.get("name", "")
+            if name in SENSOR_NAMES:
+                sensors.append((part_eid, part_data))
+            elif name in COMPUTER_NAMES:
+                computers.append((part_eid, part_data))
+            elif name in ACTUATOR_NAMES:
+                actuators.append((part_eid, part_data))
+            else:
+                other.append((part_eid, part_data))
+
+        COL_SPACING = 280
+        ROW_SPACING = 100
+
+        eid_to_node = {}
+        for col_idx, group in enumerate([sensors, computers, actuators, other]):
+            for row_idx, (part_eid, part_data) in enumerate(group):
+                part_eid = int(part_eid)
+                if part_eid in positions:
+                    wx, wy = positions[part_eid]
+                else:
+                    wx = col_idx * COL_SPACING
+                    wy = -row_idx * ROW_SPACING
+
+                node = _FlowNode(
+                    part_eid,
+                    part_data.get("name", f"Part {part_eid}"),
+                    part_data.get("ports", []),
+                    wx=wx, wy=wy,
+                    on_inspect=self._on_inspect
+                )
+                node.flipped = flipped.get(part_eid, False)
+                self.nodes.append(node)
+                eid_to_node[part_eid] = node
+
+        for from_eid, from_port, to_eid, to_port in edges:
+            a = eid_to_node.get(int(from_eid))
+            b = eid_to_node.get(int(to_eid))
+            if a and b:
+                pa = next((p for p in a.ports if p[0] == from_port), None)
+                pb = next((p for p in b.ports if p[0] == to_port), None)
+                if pa and pb:
+                    self.edges.append((a, pa, b, pb))
 
 
 
