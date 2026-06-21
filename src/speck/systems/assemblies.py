@@ -12,12 +12,15 @@ from ..components.assemblies import (
     Assembly, PartIdentity, ScriptBehavior,
     ThrusterBehavior, AttitudeBehavior, ResourceBehavior, AnsibleBehavior, 
     PositionSensorBehavior, VelocitySensorBehavior, HeadingSensorBehavior, AngularVelocitySensorBehavior,
+    IdentitySensorBehavior, EntityStateSensorBehavior,
     PORT_TYPE, PORT_DIRECTION,
 )
 from ..components.dynamics import (
     Acceleration, AngularAcceleration, Attitude, 
     Position, Velocity, AngularVelocity,
 )
+from ..components.functional import Identity
+
 from .system import System
 
 from ..sdk.parts import Ports
@@ -45,8 +48,8 @@ class AssemblySystem(System):
         hdg_sensors  = world.get_component(HeadingSensorBehavior)
         vel_sensors  = world.get_component(VelocitySensorBehavior)
         omg_sensors  = world.get_component(AngularVelocitySensorBehavior)
-        pose_sensors = world.get_component(PositionSensorBehavior)
-        velocity_sensors = world.get_component(VelocitySensorBehavior)
+        id_sensors = world.get_component(IdentitySensorBehavior)
+        entstate_sensor = world.get_component(EntityStateSensorBehavior)
 
         positions    = world.get_component(Position)
         velocities   = world.get_component(Velocity)
@@ -54,15 +57,22 @@ class AssemblySystem(System):
         attitude_components = world.get_component(Attitude)
         ang_vels     = world.get_component(AngularVelocity)
         ang_accels = world.get_component(AngularAcceleration)
+        ids = world.get_component(Identity)
 
         for assembly_eid, assembly in assemblies.items():
             self._update_position_sensors(assembly_eid, assembly, identities, pos_sensors, positions)
             self._update_heading_sensors(assembly_eid, assembly, identities, hdg_sensors, attitude_components)
             self._update_velocity_sensors(assembly_eid, assembly, identities, vel_sensors, velocities)
             self._update_angular_velocity_sensors(assembly_eid, assembly, identities, omg_sensors, ang_vels)
-            self._update_ansibles(assembly, identities, ansibles, world)
-            self._run_scripts(assembly_eid, assembly, identities, scripts, world, dt)
+            self._update_identity_sensors(assembly_eid, assembly, identities, id_sensors, ids)
+            self._update_entity_state_sensors(assembly_eid, assembly, identities, entstate_sensor, positions, velocities, attitude_components, ang_vels)
+            self._receive_ansibles(assembly, identities, ansibles, world)
+
             self._propagate_data(assembly, identities)
+
+            self._run_scripts(assembly_eid, assembly, identities, scripts, world, dt)
+            self._transmit_ansibles(assembly, identities, ansibles, world)
+
             self._update_rates(assembly, identities, thrusters, resources)
             self._settle_resources(assembly, identities, resources, dt)
             self._apply_effects(assembly_eid, assembly, identities, thrusters,
@@ -175,6 +185,23 @@ class AssemblySystem(System):
 
     # Processing Steps
 
+    def _update_identity_sensors(self, assembly_eid, assembly, identities_part, id_sensors, identities_world):
+        for part_eid in assembly.parts:
+            if part_eid not in id_sensors or part_eid not in identities_part:
+                continue
+            pi = identities_part[part_eid]
+            if "directory" not in pi.port_values:
+                continue
+            self_id = identities_world.get(assembly_eid)
+            result = {
+                "self": {"eid": assembly_eid, "name": self_id.name, "classification": self_id.classification} if self_id else {},
+                "others": {
+                    eid: {"name": ident.name, "classification": ident.classification}
+                    for eid, ident in identities_world.items()
+                    if eid != assembly_eid
+                }
+            }
+            pi.port_values["directory"] = result
 
     def _update_position_sensors(self, assembly_eid, assembly, identities, sensors, positions):
         for part_eid in assembly.parts:
@@ -224,24 +251,52 @@ class AssemblySystem(System):
             if "omega" in pi.port_values:
                 pi.port_values["omega"] = av.z
 
-    def _update_ansibles(self, assembly, identities, ansibles, world):
+
+    def _update_entity_state_sensors(self, assembly_eid, assembly, identities_part, sensors, positions, velocities, attitudes, ang_vels):
+        for part_eid in assembly.parts:
+            if part_eid not in sensors or part_eid not in identities_part:
+                continue
+            pi = identities_part[part_eid]
+            raw = pi.port_values.get("target_eid")
+            if raw is None:
+                continue
+            try:
+                target_eid = int(raw)
+            except (TypeError, ValueError):
+                continue
+            pos = positions.get(target_eid)
+            vel = velocities.get(target_eid)
+            att = attitudes.get(target_eid)
+            av  = ang_vels.get(target_eid)
+            if "x"       in pi.port_values: pi.port_values["x"]       = pos.x if pos else None
+            if "y"       in pi.port_values: pi.port_values["y"]       = pos.y if pos else None
+            if "vx"      in pi.port_values: pi.port_values["vx"]      = vel.x if vel else None
+            if "vy"      in pi.port_values: pi.port_values["vy"]      = vel.y if vel else None
+            if "heading" in pi.port_values: pi.port_values["heading"]  = math.atan2(
+                2*(att.w*att.z + att.x*att.y),
+                1 - 2*(att.y**2 + att.z**2)
+            ) if att else None
+            if "omega"   in pi.port_values: pi.port_values["omega"]   = av.z if av else None
+
+    
+
+    def _receive_ansibles(self, assembly, identities, ansibles, world):
         for part_eid in assembly.parts:
             if part_eid not in ansibles or part_eid not in identities:
                 continue
-            ab = ansibles[part_eid]
             pi = identities[part_eid]
+            if "receive" in pi.port_values:
+                pi.port_values["receive"] = dict(world.message_network._data)
 
-            # receive: network -> port
-            for msg_key, port_name in ab.receive.items():
-                value = world.message_network.read(msg_key)
-                if port_name in pi.port_values:
-                    pi.port_values[port_name] = value
-
-            # transmit: port -> network
-            for port_name, msg_key in ab.transmit.items():
-                value = pi.port_values.get(port_name)
-                if value is not None:
-                    world.message_network.write(msg_key, value)
+    def _transmit_ansibles(self, assembly, identities, ansibles, world):
+        for part_eid in assembly.parts:
+            if part_eid not in ansibles or part_eid not in identities:
+                continue
+            pi = identities[part_eid]
+            payload = pi.port_values.get("transmit")
+            if isinstance(payload, dict):
+                for key, value in payload.items():
+                    world.message_network.write(key, value)
 
 
     def _run_scripts(self, assembly_eid, assembly, identities, scripts, world, dt):

@@ -11,7 +11,8 @@ from speck.scenarios.base_scenarios import generate_scene_smallbody, generate_sc
 from speck.scenarios.agent_scenarios import (
     generate_scene_emptythruster, generate_scene_emptythrusterrcs, 
     generate_scene_ansible_test, generate_scene_ansible_test2, generate_scene_navigator, 
-    generate_scene_thread_test, generate_scene_mpc_navigator,
+    generate_scene_thread_test, generate_scene_mpc_navigator, generate_scene_identity_test,
+    generate_scene_follower_test, 
 )
 
 from speck.ssh import start_ssh_server
@@ -43,7 +44,9 @@ world.add_system(AttitudeSystem())
 # generate_scene_ansible_test2(world)
 # generate_scene_navigator(world)
 # generate_scene_thread_test(world)
-generate_scene_mpc_navigator(world)
+# generate_scene_mpc_navigator(world)
+# generate_scene_identity_test(world)
+generate_scene_follower_test(world)
 
 # Set up rendering
 windows = []
@@ -61,4 +64,13 @@ if __name__ == '__main__':
         main_window.hud.update_ups(dt)
     
     pyglet.clock.schedule_interval(update, dt)
-    pyglet.app.run()
+
+    try:
+        pyglet.app.run()
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        raise
+    finally:
+        print("Shutting down")
+        pyglet.app.exit()

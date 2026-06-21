@@ -54,11 +54,9 @@ class ScriptBehavior(Component):
 # Sensor Parts
 
 class AnsibleBehavior(Component):
-    """Maps message network keys to/from ports"""
-    def __init__(self, receive: dict[str, str] | None = None,
-                       transmit: dict[str, str] | None = None) -> None:
-        self.receive  = receive  or {}  # msg_key -> port_name
-        self.transmit = transmit or {}  # port_name -> msg_key
+    """Ansible comms — transmit and receive dicts on the message network"""
+    # TODO: consider channels
+    pass
 
 class PositionSensorBehavior(Component):
     pass
@@ -70,6 +68,12 @@ class VelocitySensorBehavior(Component):
     pass
 
 class AngularVelocitySensorBehavior(Component):
+    pass
+
+class IdentitySensorBehavior(Component):
+    pass
+
+class EntityStateSensorBehavior(Component):
     pass
 
 

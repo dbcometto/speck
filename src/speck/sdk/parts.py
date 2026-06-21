@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 from ..components.assemblies import (
     PartIdentity, ThrusterBehavior, AttitudeBehavior, ResourceBehavior, ScriptBehavior, 
     AnsibleBehavior, PositionSensorBehavior, VelocitySensorBehavior, HeadingSensorBehavior, AngularVelocitySensorBehavior,
+    IdentitySensorBehavior, EntityStateSensorBehavior,
     PORT_TYPE, PORT_DIRECTION
 )
 
@@ -98,23 +99,15 @@ class Computer(Part):
 # Sensors
 
 class Ansible(Part):
-    def __init__(self, receive: dict[str, str] | None = None,
-                       transmit: dict[str, str] | None = None):
-        self.receive  = receive  or {}
-        self.transmit = transmit or {}
-
     def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
-        ports  = [(port_name, PORT_TYPE.DATA, PORT_DIRECTION.OUT)
-                  for port_name in self.receive.values()]
-        ports += [(port_name, PORT_TYPE.DATA, PORT_DIRECTION.IN)
-                  for port_name in self.transmit.keys()]
-
+        ports = [
+            ("receive",  PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+            ("transmit", PORT_TYPE.DATA, PORT_DIRECTION.IN),
+        ]
         eid = world.create_entity()
         world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="Ansible", ports=ports))
-        world.add_component(eid, AnsibleBehavior(self.receive, self.transmit))
-
+        world.add_component(eid, AnsibleBehavior())
         assembly.parts.append(eid)
-
         return PartHandle(eid, ports)
     
 class PositionSensor(Part):
@@ -163,6 +156,34 @@ class AngularVelocitySensor(Part):
         eid = world.create_entity()
         world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="AngularVelocitySensor", ports=ports))
         world.add_component(eid, AngularVelocitySensorBehavior())
+        assembly.parts.append(eid)
+        return PartHandle(eid, ports)
+    
+
+class IdentitySensor(Part):
+    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
+        ports = [("directory", PORT_TYPE.DATA, PORT_DIRECTION.OUT)]
+        eid = world.create_entity()
+        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="IdentitySensor", ports=ports))
+        world.add_component(eid, IdentitySensorBehavior())
+        assembly.parts.append(eid)
+        return PartHandle(eid, ports)
+    
+
+class EntityStateSensor(Part):
+    def _instantiate(self, world, assembly_eid, assembly) -> PartHandle:
+        ports = [
+            ("target_eid", PORT_TYPE.DATA, PORT_DIRECTION.IN),
+            ("x",          PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+            ("y",          PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+            ("vx",         PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+            ("vy",         PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+            ("heading",    PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+            ("omega",      PORT_TYPE.DATA, PORT_DIRECTION.OUT),
+        ]
+        eid = world.create_entity()
+        world.add_component(eid, PartIdentity(assembly_eid=assembly_eid, name="EntityStateSensor", ports=ports))
+        world.add_component(eid, EntityStateSensorBehavior())
         assembly.parts.append(eid)
         return PartHandle(eid, ports)
     

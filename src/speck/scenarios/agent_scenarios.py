@@ -15,7 +15,8 @@ from scipy.optimize import minimize
 from speck.sdk.agent import Agent
 from speck.sdk.parts import (
     Thruster, Tank, Computer, AttitudeController, 
-    Ansible, PositionSensor, VelocitySensor, HeadingSensor, AngularVelocitySensor
+    Ansible, PositionSensor, VelocitySensor, HeadingSensor, AngularVelocitySensor,
+    IdentitySensor, EntityStateSensor
 )
 
 
@@ -77,20 +78,20 @@ class AgentA(Agent):
         tank     = self.add(Tank("fuel", capacity=1000.0, fill=1000.0))
         thruster = self.add(Thruster(max_thrust=1.0))
         rcs      = self.add(AttitudeController(max_torque=1.0))
-        ansible  = self.add(Ansible(transmit={"message_out": "a_to_b"}))
-        cpu      = self.add(Computer(outputs=["throttle_out", "attitude_out", "message_out"]))
+        ansible  = self.add(Ansible())
+        cpu      = self.add(Computer(outputs=["throttle_out", "attitude_out", "transmit_out"]))
 
-        self.connect(tank.fuel_out,       thruster.fuel_in)
-        self.connect(cpu.throttle_out,    thruster.throttle_in)
-        self.connect(cpu.attitude_out,    rcs.control_in)
-        self.connect(cpu.message_out,     ansible.message_out)
+        self.connect(tank.fuel_out,        thruster.fuel_in)
+        self.connect(cpu.throttle_out,     thruster.throttle_in)
+        self.connect(cpu.attitude_out,     rcs.control_in)
+        self.connect(cpu.transmit_out,     ansible.transmit)
 
         cpu.run(self.control, period=1.0)
 
     def control(self, ports, dt):
         ports.throttle_out  = random.uniform(0, 1)
         ports.attitude_out  = random.uniform(-1, 1)
-        ports.message_out   = f"hello from A: {random.randint(0, 1000)}"
+        ports.transmit_out  = {"a_to_b": f"hello from A: {random.randint(0, 1000)}"}
 
 
 class AgentB(Agent):
@@ -98,24 +99,26 @@ class AgentB(Agent):
         tank     = self.add(Tank("fuel", capacity=1000.0, fill=1000.0))
         thruster = self.add(Thruster(max_thrust=1.0))
         rcs      = self.add(AttitudeController(max_torque=1.0))
-        ansible  = self.add(Ansible(receive={"a_to_b": "message_in"}))
+        ansible  = self.add(Ansible())
         cpu      = self.add(Computer(
-            inputs=["message_in"],
+            inputs=["receive_in"],
             outputs=["throttle_out", "attitude_out"]
         ))
 
         self.connect(tank.fuel_out,       thruster.fuel_in)
         self.connect(cpu.throttle_out,    thruster.throttle_in)
         self.connect(cpu.attitude_out,    rcs.control_in)
-        self.connect(ansible.message_in,  cpu.message_in)
+        self.connect(ansible.receive,     cpu.receive_in)
 
         cpu.run(self.control, period=1.0)
 
     def control(self, ports, dt):
         ports.throttle_out = random.uniform(0, 1)
         ports.attitude_out = random.uniform(-1, 1)
-        # if ports.message_in:
-        #     print(f"Agent B received: {ports.message_in}")
+        if ports.receive_in:
+            msg = ports.receive_in.get("a_to_b")
+            if msg:
+                print(f"Agent B received: {msg}")
 
 
 def generate_scene_ansible_test(world: World):
@@ -140,21 +143,21 @@ class Navigator(Agent):
         pos      = self.add(PositionSensor())
         hdg      = self.add(HeadingSensor())
         vel      = self.add(VelocitySensor())
-        ansible  = self.add(Ansible(receive={"target": "target_in"}))
+        ansible  = self.add(Ansible())
         cpu      = self.add(Computer(
-            inputs=["x", "y", "heading", "vx", "vy", "target_in"],
+            inputs=["x", "y", "heading", "vx", "vy", "receive_in"],
             outputs=["throttle_out", "attitude_out"]
         ))
 
-        self.connect(tank.fuel_out,     thruster.fuel_in)
-        self.connect(cpu.throttle_out,  thruster.throttle_in)
-        self.connect(cpu.attitude_out,  rcs.control_in)
-        self.connect(pos.x,             cpu.x)
-        self.connect(pos.y,             cpu.y)
-        self.connect(hdg.heading,       cpu.heading)
-        self.connect(vel.vx,            cpu.vx)
-        self.connect(vel.vy,            cpu.vy)
-        self.connect(ansible.target_in, cpu.target_in)
+        self.connect(tank.fuel_out,      thruster.fuel_in)
+        self.connect(cpu.throttle_out,   thruster.throttle_in)
+        self.connect(cpu.attitude_out,   rcs.control_in)
+        self.connect(pos.x,              cpu.x)
+        self.connect(pos.y,              cpu.y)
+        self.connect(hdg.heading,        cpu.heading)
+        self.connect(vel.vx,             cpu.vx)
+        self.connect(vel.vy,             cpu.vy)
+        self.connect(ansible.receive,    cpu.receive_in)
 
         state = {
             "target": None,
@@ -168,10 +171,12 @@ class Navigator(Agent):
         T_KP, T_KI, T_KD = 0.1, 0.0, 0.05
 
         def control(ports, dt):
-            if ports.target_in is not None:
-                state["target"] = ports.target_in
-                state["h_integral"] = 0.0
-                state["t_integral"] = 0.0
+            if ports.receive_in:
+                target = ports.receive_in.get("target")
+                if target is not None:
+                    state["target"] = target
+                    state["h_integral"] = 0.0
+                    state["t_integral"] = 0.0
 
             if state["target"] is None or ports.x is None:
                 ports.throttle_out = 0.0
@@ -183,7 +188,6 @@ class Navigator(Agent):
             dy = ty - ports.y
             dist = math.sqrt(dx**2 + dy**2)
 
-            # heading PID
             desired_heading = math.atan2(dy, dx)
             h_error = desired_heading - ports.heading
             while h_error >  math.pi: h_error -= 2*math.pi
@@ -196,7 +200,6 @@ class Navigator(Agent):
             attitude_cmd = H_KP*h_error + H_KI*state["h_integral"] + H_KD*h_derivative
             attitude_cmd = max(-1.0, min(1.0, attitude_cmd))
 
-            # throttle PID — only when aligned
             if abs(h_error) < 0.3:
                 t_error = dist
                 state["t_integral"] += t_error * dt
@@ -213,6 +216,7 @@ class Navigator(Agent):
             ports.throttle_out = throttle_cmd
 
         cpu.run(control, period=0.1)
+
 
 
 def generate_scene_navigator(world):
@@ -349,22 +353,22 @@ class MPCNavigator(Agent):
         hdg      = self.add(HeadingSensor())
         vel      = self.add(VelocitySensor())
         omg      = self.add(AngularVelocitySensor())
-        ansible  = self.add(Ansible(receive={"target": "target_in"}))
+        ansible  = self.add(Ansible())
         cpu      = self.add(Computer(
-            inputs=["x", "y", "vx", "vy", "heading", "omega", "target_in"],
+            inputs=["x", "y", "vx", "vy", "heading", "omega", "receive_in"],
             outputs=["throttle_out", "attitude_out"]
         ))
 
-        self.connect(tank.fuel_out,     thruster.fuel_in)
-        self.connect(cpu.throttle_out,  thruster.throttle_in)
-        self.connect(cpu.attitude_out,  rcs.control_in)
-        self.connect(pos.x,             cpu.x)
-        self.connect(pos.y,             cpu.y)
-        self.connect(hdg.heading,       cpu.heading)
-        self.connect(vel.vx,            cpu.vx)
-        self.connect(vel.vy,            cpu.vy)
-        self.connect(omg.omega,         cpu.omega)
-        self.connect(ansible.target_in, cpu.target_in)
+        self.connect(tank.fuel_out,      thruster.fuel_in)
+        self.connect(cpu.throttle_out,   thruster.throttle_in)
+        self.connect(cpu.attitude_out,   rcs.control_in)
+        self.connect(pos.x,              cpu.x)
+        self.connect(pos.y,              cpu.y)
+        self.connect(hdg.heading,        cpu.heading)
+        self.connect(vel.vx,             cpu.vx)
+        self.connect(vel.vy,             cpu.vy)
+        self.connect(omg.omega,          cpu.omega)
+        self.connect(ansible.receive,    cpu.receive_in)
 
         executor = ProcessPoolExecutor(max_workers=1)
         state = {
@@ -378,9 +382,11 @@ class MPCNavigator(Agent):
         MPC_HORIZON = 30
 
         def control(ports, dt):
-            if ports.target_in is not None:
-                state["target"] = ports.target_in
-                state["u_prev"] = None
+            if ports.receive_in:
+                target = ports.receive_in.get("target")
+                if target is not None:
+                    state["target"] = target
+                    state["u_prev"] = None
 
             if state["target"] is None or ports.x is None:
                 ports.throttle_out = 0.0
@@ -418,3 +424,159 @@ class MPCNavigator(Agent):
 
 def generate_scene_mpc_navigator(world):
     world.spawn(MPCNavigator, x=0, y=0, mass=1, name="MPC Navigator")
+
+
+
+
+
+
+
+
+
+
+# ================ World Sensors ================ #
+
+class IdentityTestAgent(Agent):
+    def define(self):
+        id_sensor = self.add(IdentitySensor())
+        ansible   = self.add(Ansible())
+        cpu       = self.add(Computer(
+            inputs=["directory", "receive_in"],
+            outputs=["transmit_out"]
+        ))
+
+        self.connect(id_sensor.directory, cpu.directory)
+        self.connect(ansible.receive,     cpu.receive_in)
+        self.connect(cpu.transmit_out,    ansible.transmit)
+
+        def control(ports, dt):
+            if ports.directory is not None:
+                my_eid = ports.directory["self"]["eid"]
+                my_name = ports.directory["self"]["name"]
+                ports.transmit_out = {f"{my_eid}.pos": "broadcasting"}
+                print(f"{my_name} sees others: {list(ports.directory['others'].values())}")
+            if ports.receive_in:
+                for key, val in ports.receive_in.items():
+                    if key.endswith(".pos"):
+                        print(f"  heard: {key} = {val}")
+
+        cpu.run(control, period=2.0)
+
+def generate_scene_identity_test(world):
+    world.spawn(IdentityTestAgent, x=0,  y=0,  mass=1, name="Alpha")
+    world.spawn(IdentityTestAgent, x=10, y=0,  mass=1, name="Beta")
+    world.spawn(IdentityTestAgent, x=0,  y=10, mass=1, name="Gamma")
+
+
+
+
+
+
+
+# ================ Entity Sensors ================ #
+
+class Follower(Agent):
+    def define(self):
+        tank     = self.add(Tank("fuel", capacity=1000.0, fill=1000.0))
+        thruster = self.add(Thruster(max_thrust=1.0))
+        rcs      = self.add(AttitudeController(max_torque=1.0))
+        pos      = self.add(PositionSensor())
+        hdg      = self.add(HeadingSensor())
+        vel      = self.add(VelocitySensor())
+        id_sens  = self.add(IdentitySensor())
+        tracker  = self.add(EntityStateSensor())
+        ansible  = self.add(Ansible())
+        cpu      = self.add(Computer(
+            inputs=["x", "y", "heading", "vx", "vy", "directory", "receive_in",
+                    "target_x", "target_y"],
+            outputs=["throttle_out", "attitude_out", "target_eid_out"]
+        ))
+
+        self.connect(tank.fuel_out,        thruster.fuel_in)
+        self.connect(cpu.throttle_out,     thruster.throttle_in)
+        self.connect(cpu.attitude_out,     rcs.control_in)
+        self.connect(pos.x,                cpu.x)
+        self.connect(pos.y,                cpu.y)
+        self.connect(hdg.heading,          cpu.heading)
+        self.connect(vel.vx,               cpu.vx)
+        self.connect(vel.vy,               cpu.vy)
+        self.connect(id_sens.directory,    cpu.directory)
+        self.connect(ansible.receive,      cpu.receive_in)
+        self.connect(tracker.x,            cpu.target_x)
+        self.connect(tracker.y,            cpu.target_y)
+        self.connect(cpu.target_eid_out,   tracker.target_eid)
+
+        state = {
+            "target_eid": None,
+            "h_integral": 0.0,
+            "h_prev_error": 0.0,
+            "t_integral": 0.0,
+            "t_prev_error": 0.0,
+        }
+
+        H_KP, H_KI, H_KD = 0.1, 0.0, 0.5
+        T_KP, T_KI, T_KD = 0.1, 0.0, 0.05
+        FOLLOW_OFFSET = 5.0  # km behind target
+
+        def control(ports, dt):
+            # discover navigator by name
+            if state["target_eid"] is None and ports.directory:
+                for eid, info in ports.directory["others"].items():
+                    if info["name"] == "Navigator":
+                        state["target_eid"] = eid
+                        break
+
+            if state["target_eid"] is not None:
+                ports.target_eid_out = state["target_eid"]
+
+            if ports.target_x is None or ports.x is None:
+                ports.throttle_out = 0.0
+                ports.attitude_out = 0.0
+                return
+
+            # follow at offset
+            tx = ports.target_x - FOLLOW_OFFSET
+            ty = ports.target_y
+
+            dx = tx - ports.x
+            dy = ty - ports.y
+            dist = math.sqrt(dx**2 + dy**2)
+
+            desired_heading = math.atan2(dy, dx)
+            h_error = desired_heading - ports.heading
+            while h_error >  math.pi: h_error -= 2*math.pi
+            while h_error < -math.pi: h_error += 2*math.pi
+
+            state["h_integral"] += h_error * dt
+            h_derivative = (h_error - state["h_prev_error"]) / dt if dt > 0 else 0.0
+            state["h_prev_error"] = h_error
+
+            attitude_cmd = H_KP*h_error + H_KI*state["h_integral"] + H_KD*h_derivative
+            attitude_cmd = max(-1.0, min(1.0, attitude_cmd))
+
+            if abs(h_error) < 0.3:
+                t_error = dist
+                state["t_integral"] += t_error * dt
+                t_derivative = (t_error - state["t_prev_error"]) / dt if dt > 0 else 0.0
+                state["t_prev_error"] = t_error
+                throttle_cmd = T_KP*t_error + T_KI*state["t_integral"] + T_KD*t_derivative
+                throttle_cmd = max(0.0, min(1.0, throttle_cmd))
+            else:
+                state["t_prev_error"] = 0.0
+                state["t_integral"]   = 0.0
+                throttle_cmd = 0.0
+
+            ports.attitude_out = attitude_cmd
+            ports.throttle_out = throttle_cmd
+
+        cpu.run(control, period=0.1)
+
+
+def generate_scene_follower_test(world):
+    world.spawn(Navigator,  x=0,  y=0, mass=1, name="Navigator")
+    world.spawn(Follower,   x=-10, y=0, mass=1, name="Follower")
+
+
+
+
+
